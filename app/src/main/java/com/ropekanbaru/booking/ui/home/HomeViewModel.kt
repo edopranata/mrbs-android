@@ -8,6 +8,8 @@ import androidx.lifecycle.viewModelScope
 import com.ropekanbaru.booking.data.remote.ApiErrors
 import com.ropekanbaru.booking.data.remote.DashboardDto
 import com.ropekanbaru.booking.data.remote.MrbsApi
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 
 data class HomeUiState(
@@ -17,13 +19,15 @@ data class HomeUiState(
     val error: String? = null,
 )
 
-class HomeViewModel(private val api: MrbsApi) : ViewModel() {
+class HomeViewModel(private val api: MrbsApi, bookingChanges: StateFlow<Int>) : ViewModel() {
 
     var state by mutableStateOf(HomeUiState())
         private set
 
     init {
         load()
+        // Muat ulang setelah booking dibuat/dibatalkan dari layar lain.
+        viewModelScope.launch { bookingChanges.drop(1).collect { load() } }
     }
 
     fun refresh() = load(refreshing = true)

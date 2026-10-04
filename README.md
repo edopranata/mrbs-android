@@ -16,11 +16,14 @@ repository [mrbs-backend](https://github.com/edopranata/mrbs-backend); versi web
 1. Buka folder ini di **Android Studio** (2026.2 atau lebih baru). Android Studio membuat
    `local.properties` berisi lokasi Android SDK secara otomatis (file ini tidak di-commit).
 2. Jalankan backend lokal dari repository mrbs-backend: `php artisan serve` (port 8000).
-3. Nyalakan emulator atau sambungkan HP (USB debugging aktif), lalu teruskan port-nya:
-   ```bash
-   ./gradlew adbReverse          # = adb reverse tcp:8000 tcp:8000 (ulangi tiap emulator/HP tersambung)
-   ```
+3. Nyalakan emulator atau sambungkan HP (USB debugging aktif).
 4. Klik **Run** di Android Studio, lalu login dengan akun backend (mis. `user` / `password`).
+   Setiap build debug otomatis menjalankan `adb reverse tcp:8000 tcp:8000` ke semua
+   emulator/HP yang tersambung, sehingga `127.0.0.1:8000` di perangkat diteruskan ke Mac.
+
+> Muncul "Tidak dapat terhubung ke server" padahal `php artisan serve` jalan? Emulator/HP
+> kemungkinan baru dinyalakan ulang setelah build. Klik Run lagi atau jalankan
+> `./gradlew adbReverse`.
 
 ### Alamat server API
 

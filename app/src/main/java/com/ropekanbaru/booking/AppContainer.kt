@@ -23,9 +23,8 @@ class AppContainer(context: Context) {
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val sessionStore = SessionStore(context.applicationContext, TokenCipher())
 
-    // authRepository dipakai oleh interceptor API (saat 401) dan sebaliknya; keduanya dibuat di sini.
-    lateinit var authRepository: AuthRepository
-        private set
+    // authRepository dipakai oleh interceptor API (saat 401) dan sebaliknya; diisi di blok init.
+    val authRepository: AuthRepository
 
     val api: MrbsApi = ApiClient.create(
         baseUrl = BuildConfig.API_BASE_URL,
@@ -38,6 +37,15 @@ class AppContainer(context: Context) {
 
     /** Nama aplikasi & aturan booking dari menu Pengaturan backend (publik). */
     val settings: StateFlow<SettingsDto> = _settings.asStateFlow()
+
+    private val _bookingChanges = MutableStateFlow(0)
+
+    /** Bertambah setiap ada booking dibuat/dibatalkan, agar layar lain memuat ulang datanya. */
+    val bookingChanges: StateFlow<Int> = _bookingChanges.asStateFlow()
+
+    fun notifyBookingsChanged() {
+        _bookingChanges.value++
+    }
 
     init {
         authRepository = AuthRepository(api, sessionStore, appScope)

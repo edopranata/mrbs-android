@@ -20,7 +20,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ropekanbaru.booking.AppContainer
 import com.ropekanbaru.booking.MrbsApp
 import com.ropekanbaru.booking.data.SessionState
-import com.ropekanbaru.booking.ui.home.HomeScreen
 import com.ropekanbaru.booking.ui.login.LoginScreen
 import com.ropekanbaru.booking.ui.theme.MrbsTheme
 
@@ -56,12 +55,7 @@ private fun MrbsRoot(container: AppContainer) {
         when (state) {
             SessionState.Loading -> Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
             SessionState.LoggedOut -> LoginScreen(auth = container.authRepository, settings = settings)
-            is SessionState.LoggedIn -> HomeScreen(
-                user = state.user,
-                settings = settings,
-                api = container.api,
-                auth = container.authRepository,
-            )
+            is SessionState.LoggedIn -> MainScreen(user = state.user, settings = settings, container = container)
         }
     }
 }
