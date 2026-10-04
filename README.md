@@ -15,14 +15,43 @@ repository [mrbs-backend](https://github.com/edopranata/mrbs-backend); versi web
 
 1. Buka folder ini di **Android Studio** (2026.2 atau lebih baru). Android Studio membuat
    `local.properties` berisi lokasi Android SDK secara otomatis (file ini tidak di-commit).
-2. Pilih emulator atau HP (USB debugging aktif), lalu klik **Run**.
+2. Jalankan backend lokal dari repository mrbs-backend: `php artisan serve` (port 8000).
+3. Nyalakan emulator atau sambungkan HP (USB debugging aktif), lalu teruskan port-nya:
+   ```bash
+   ./gradlew adbReverse          # = adb reverse tcp:8000 tcp:8000 (ulangi tiap emulator/HP tersambung)
+   ```
+4. Klik **Run** di Android Studio, lalu login dengan akun backend (mis. `user` / `password`).
 
-Dari terminal (butuh `JAVA_HOME` ke JDK Android Studio dan `ANDROID_HOME` ke Android SDK):
+### Alamat server API
+
+| Build | Alamat |
+|---|---|
+| debug | `http://127.0.0.1:8000/api/` (server lokal lewat `adb reverse`) |
+| release | `https://booking.ropekanbaru.com/api/` |
+
+Alamat debug bisa diganti tanpa mengubah kode lewat `local.properties`, mis.
+`mrbs.apiUrl=https://booking.ropekanbaru.com/api/`. Alias emulator `10.0.2.2` tidak dipakai karena
+aplikasi yang menargetkan Android 17 (API 37) tidak bisa menjangkaunya.
+
+### Dari terminal
+
+Butuh `JAVA_HOME` ke JDK Android Studio dan `ANDROID_HOME` ke Android SDK:
 
 ```bash
 ./gradlew assembleDebug        # APK debug: app/build/outputs/apk/debug/app-debug.apk
 ./gradlew installDebug         # pasang ke emulator/HP yang tersambung
-./gradlew test                 # unit test
+./gradlew testDebugUnitTest    # unit test
+```
+
+## Struktur kode
+
+```
+app/src/main/java/com/ropekanbaru/booking/
+  AppContainer.kt          # dependensi aplikasi (API, sesi, pengaturan)
+  data/remote/             # Retrofit API, model JSON, pesan error
+  data/session/            # token login terenkripsi (Android Keystore + DataStore)
+  data/AuthRepository.kt   # login, logout, pemulihan sesi
+  ui/                      # layar Jetpack Compose (login, beranda) & tema
 ```
 
 ## Keamanan
