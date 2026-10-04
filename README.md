@@ -21,9 +21,18 @@ repository [mrbs-backend](https://github.com/edopranata/mrbs-backend); versi web
    Setiap build debug otomatis menjalankan `adb reverse tcp:8000 tcp:8000` ke semua
    emulator/HP yang tersambung, sehingga `127.0.0.1:8000` di perangkat diteruskan ke Mac.
 
-> Muncul "Tidak dapat terhubung ke server" padahal `php artisan serve` jalan? Emulator/HP
-> kemungkinan baru dinyalakan ulang setelah build. Klik Run lagi atau jalankan
-> `./gradlew adbReverse`.
+> **Muncul "Tidak dapat terhubung ke server" padahal `php artisan serve` jalan?** Penerusan
+> `adb reverse` hilang setiap emulator/HP dimulai ulang, kabel USB dicabut, atau adb server
+> di-restart (Android Studio sering melakukannya). Jalankan `./gradlew adbReverse`, atau biarkan
+> skrip berikut berjalan di satu terminal selama develop agar penerusan selalu dipasang ulang otomatis:
+>
+> ```bash
+> scripts/adb-reverse-watch.sh
+> ```
+>
+> Di build debug, pesan error koneksi juga menampilkan petunjuk ini.
+> Bila memakai beberapa perangkat sekaligus, aktifkan `PHP_CLI_SERVER_WORKERS=4` di `.env` backend
+> agar `php artisan serve` melayani beberapa request bersamaan.
 
 ### Alamat server API
 
