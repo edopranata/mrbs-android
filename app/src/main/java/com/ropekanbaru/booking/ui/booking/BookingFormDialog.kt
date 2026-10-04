@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -394,7 +395,7 @@ private fun RoomOption(
         modifier = modifier
             .alpha(if (selectable || selected) 1f else 0.6f)
             .clip(RoundedCornerShape(8.dp))
-            .clickable(enabled = selectable, role = Role.RadioButton, onClick = onSelect),
+            .selectable(selected = selected, enabled = selectable, role = Role.RadioButton, onClick = onSelect),
     ) {
         Row(Modifier.padding(12.dp)) {
             Box(Modifier.padding(top = 4.dp).size(12.dp).clip(CircleShape).background(roomColor(room.color, Tw.Indigo600)))

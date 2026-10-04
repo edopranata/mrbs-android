@@ -132,14 +132,18 @@ fun TimeGrid(
     BoxWithConstraints(modifier.fillMaxSize()) {
         val colWidth = maxOf(MIN_COL, (maxWidth - TIME_COL) / columns.size.coerceAtLeast(1))
         val vertical = rememberScrollState()
-        // Satu scroll horizontal untuk header & isi agar kolomnya selalu sejajar.
-        Box(Modifier.fillMaxSize().horizontalScroll(rememberScrollState())) {
-            Column(Modifier.width(TIME_COL + colWidth * columns.size).fillMaxHeight()) {
-                // Header
-                Row(Modifier.height(56.dp)) {
-                    Box(Modifier.width(TIME_COL).fillMaxHeight().padding(8.dp), contentAlignment = Alignment.BottomStart) {
-                        Text("Waktu", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
-                    }
+        // Kolom "Waktu" tetap terlihat di kiri saat grid digeser ke samping (seperti versi web).
+        // Header ruangan/hari & isi grid memakai ScrollState yang sama agar selalu sejajar; header
+        // hanya mengikuti (tidak bisa digeser sendiri).
+        val horizontal = rememberScrollState()
+        Column(Modifier.fillMaxSize()) {
+            // Header
+            Row(Modifier.height(56.dp)) {
+                Box(Modifier.width(TIME_COL).fillMaxHeight().background(Color.White).padding(8.dp), contentAlignment = Alignment.BottomStart) {
+                    Text("Waktu", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
+                }
+                Box(Modifier.width(1.dp).fillMaxHeight().background(Slate200))
+                Row(Modifier.weight(1f).horizontalScroll(horizontal, enabled = false)) {
                     columns.forEach { col ->
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -156,20 +160,23 @@ fun TimeGrid(
                         }
                     }
                 }
-                HorizontalDivider(color = Color(0xFFCBD5E1))
+            }
+            HorizontalDivider(color = Color(0xFFCBD5E1))
 
-                // Isi
-                Row(Modifier.weight(1f).verticalScroll(vertical)) {
-                    Column(Modifier.width(TIME_COL)) {
-                        grid.starts.forEachIndexed { i, m ->
-                            Text(
-                                TimeSlots.format(m),
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.height(ROW_H).fillMaxWidth().background(if (i % 2 == 0) Slate50 else Color.White).padding(start = 8.dp, top = 5.dp),
-                            )
-                        }
+            // Isi: kolom waktu tetap, kolom ruangan/hari bisa digeser ke samping
+            Row(Modifier.weight(1f).verticalScroll(vertical)) {
+                Column(Modifier.width(TIME_COL)) {
+                    grid.starts.forEachIndexed { i, m ->
+                        Text(
+                            TimeSlots.format(m),
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.height(ROW_H).fillMaxWidth().background(if (i % 2 == 0) Slate50 else Color.White).padding(start = 8.dp, top = 5.dp),
+                        )
                     }
+                }
+                Box(Modifier.width(1.dp).height(bodyHeight).background(Slate200))
+                Row(Modifier.weight(1f).horizontalScroll(horizontal)) {
                     columns.forEach { col ->
                         val free = { m: Int -> grid.isFree(col.date, col.bookings, m, now) }
                         Box(
