@@ -10,6 +10,7 @@ import com.ropekanbaru.booking.data.remote.DashboardDto
 import com.ropekanbaru.booking.data.remote.MrbsApi
 import com.ropekanbaru.booking.data.remote.RoomScheduleDto
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
@@ -40,9 +41,13 @@ class HomeViewModel(private val api: MrbsApi, bookingChanges: StateFlow<Int>) : 
         state = state.copy(loading = state.dashboard == null, refreshing = refreshing, error = null)
         viewModelScope.launch {
             runCatching {
-                val dashboard = async { api.dashboard() }
-                val schedule = async { api.schedule() }
-                dashboard.await() to schedule.await().rooms
+                // coroutineScope: bila salah satu gagal (mis. server tidak terjangkau), errornya
+                // dilempar ke runCatching ini, tidak merambat ke viewModelScope dan membuat force close.
+                coroutineScope {
+                    val dashboard = async { api.dashboard() }
+                    val schedule = async { api.schedule() }
+                    dashboard.await() to schedule.await().rooms
+                }
             }
                 .onSuccess { (dashboard, rooms) -> state = HomeUiState(loading = false, dashboard = dashboard, rooms = rooms) }
                 .onFailure { state = state.copy(loading = false, refreshing = false, error = ApiErrors.message(it)) }
