@@ -54,6 +54,15 @@ import com.ropekanbaru.booking.BuildConfig
 import com.ropekanbaru.booking.R
 import com.ropekanbaru.booking.data.AuthRepository
 import com.ropekanbaru.booking.data.remote.SettingsDto
+import com.ropekanbaru.booking.ui.components.ErrorCard
+import com.ropekanbaru.booking.ui.components.LabeledTextField
+import com.ropekanbaru.booking.ui.components.PrimaryButton
+import com.ropekanbaru.booking.ui.components.Tw
+import com.ropekanbaru.booking.ui.icons.Visibility
+import com.ropekanbaru.booking.ui.icons.VisibilityOff
+import androidx.compose.material.icons.Icons
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 
 @Composable
 fun LoginScreen(auth: AuthRepository, settings: SettingsDto) {
@@ -62,7 +71,7 @@ fun LoginScreen(auth: AuthRepository, settings: SettingsDto) {
     val focus = LocalFocusManager.current
     var showPassword by rememberSaveable { mutableStateOf(false) }
 
-    Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
+    Surface(color = Tw.Slate50, modifier = Modifier.fillMaxSize()) {
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
@@ -72,43 +81,33 @@ fun LoginScreen(auth: AuthRepository, settings: SettingsDto) {
                 .verticalScroll(rememberScrollState())
                 .padding(24.dp),
         ) {
+            // Seperti halaman login versi web: ikon, judul "Masuk", isian berlabel, tombol penuh.
             Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth(),
+                modifier = Modifier.widthIn(max = 400.dp).fillMaxWidth(),
             ) {
                 Image(
                     painter = painterResource(R.drawable.ic_launcher_foreground),
                     contentDescription = null,
                     modifier = Modifier
-                        .size(80.dp)
-                        .clip(RoundedCornerShape(22.dp))
-                        .background(MaterialTheme.colorScheme.primary),
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Tw.Indigo600),
                 )
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Column {
+                    Text("Masuk", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Tw.Slate900)
                     Text(
-                        settings.appName,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center,
+                        "Gunakan akun kantor Anda untuk melanjutkan.",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Tw.Slate500,
                     )
-                    settings.appSubtitle?.let {
-                        Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
                 }
-
                 Spacer(Modifier.height(8.dp))
-                Text(
-                    "Masuk dengan akun kantor Anda",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.fillMaxWidth(),
-                )
 
-                OutlinedTextField(
+                LabeledTextField(
+                    label = "Username",
                     value = state.username,
                     onValueChange = vm::onUsernameChange,
-                    label = { Text("Username") },
-                    singleLine = true,
                     enabled = !state.loading,
                     keyboardOptions = KeyboardOptions(
                         capitalization = KeyboardCapitalization.None,
@@ -116,18 +115,21 @@ fun LoginScreen(auth: AuthRepository, settings: SettingsDto) {
                         keyboardType = KeyboardType.Ascii,
                         imeAction = ImeAction.Next,
                     ),
-                    modifier = Modifier.fillMaxWidth().semantics { contentType = ContentType.Username },
+                    textFieldModifier = Modifier.semantics { contentType = ContentType.Username },
                 )
-                OutlinedTextField(
+                LabeledTextField(
+                    label = "Password",
                     value = state.password,
                     onValueChange = vm::onPasswordChange,
-                    label = { Text("Password") },
-                    singleLine = true,
                     enabled = !state.loading,
                     visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                     trailingIcon = {
-                        TextButton(onClick = { showPassword = !showPassword }) {
-                            Text(if (showPassword) "Sembunyikan" else "Lihat")
+                        IconButton(onClick = { showPassword = !showPassword }) {
+                            Icon(
+                                if (showPassword) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                                contentDescription = if (showPassword) "Sembunyikan password" else "Lihat password",
+                                tint = Tw.Slate400,
+                            )
                         }
                     },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
@@ -135,48 +137,26 @@ fun LoginScreen(auth: AuthRepository, settings: SettingsDto) {
                         focus.clearFocus()
                         vm.submit()
                     }),
-                    modifier = Modifier.fillMaxWidth().semantics { contentType = ContentType.Password },
+                    textFieldModifier = Modifier.semantics { contentType = ContentType.Password },
                 )
 
-                state.error?.let {
-                    Surface(
-                        color = MaterialTheme.colorScheme.errorContainer,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(
-                            it,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(12.dp),
-                        )
-                    }
-                }
+                state.error?.let { ErrorCard(it) }
 
-                Button(
+                PrimaryButton(
+                    if (state.loading) "Memproses…" else "Masuk",
                     onClick = {
                         focus.clearFocus()
                         vm.submit()
                     },
                     enabled = !state.loading,
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                ) {
-                    if (state.loading) {
-                        CircularProgressIndicator(
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    } else {
-                        Text("Masuk")
-                    }
-                }
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                )
 
                 if (BuildConfig.DEBUG) {
                     Text(
                         "Server: ${BuildConfig.API_BASE_URL}",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = Tw.Slate400,
                     )
                 }
             }

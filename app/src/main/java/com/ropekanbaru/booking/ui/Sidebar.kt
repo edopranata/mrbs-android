@@ -19,16 +19,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Place
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.outlined.AccountCircle
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -48,17 +43,25 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.ropekanbaru.booking.data.remote.SettingsDto
 import com.ropekanbaru.booking.data.remote.UserDto
+import com.ropekanbaru.booking.ui.components.Tw
+import com.ropekanbaru.booking.ui.icons.Apartment
+import com.ropekanbaru.booking.ui.icons.Assignment
+import com.ropekanbaru.booking.ui.icons.CalendarMonth
+import com.ropekanbaru.booking.ui.icons.Dashboard
+import com.ropekanbaru.booking.ui.icons.FactCheck
+import com.ropekanbaru.booking.ui.icons.Group
+import com.ropekanbaru.booking.ui.icons.Logout
 
-/** Tujuan menu sidebar tablet (sama dengan menu versi web). */
+/** Tujuan menu sidebar (sama dengan menu versi web). */
 enum class Destination(val title: String, val icon: ImageVector, val admin: Boolean = false, val systemAdmin: Boolean = false) {
-    Dashboard("Dashboard", Icons.Default.Home),
-    Schedule("Jadwal Ruangan", Icons.Default.DateRange),
-    MyBookings("Booking Saya", Icons.AutoMirrored.Filled.List),
-    Rooms("Ruangan", Icons.Default.Place),
-    TodayBookings("Semua Booking", Icons.Default.CheckCircle, admin = true),
-    Users("Manajemen User", Icons.Default.Person, admin = true),
-    Settings("Pengaturan", Icons.Default.Settings, admin = true, systemAdmin = true),
-    Profile("Profil", Icons.Default.AccountCircle),
+    Dashboard("Dashboard", Icons.Outlined.Dashboard),
+    Schedule("Jadwal Ruangan", Icons.Outlined.CalendarMonth),
+    MyBookings("Booking Saya", Icons.AutoMirrored.Outlined.Assignment),
+    Rooms("Ruangan", Icons.Outlined.Apartment),
+    TodayBookings("Semua Booking", Icons.AutoMirrored.Outlined.FactCheck, admin = true),
+    Users("Manajemen User", Icons.Outlined.Group, admin = true),
+    Settings("Pengaturan", Icons.Outlined.Settings, admin = true, systemAdmin = true),
+    Profile("Profil", Icons.Outlined.AccountCircle),
 }
 
 private val Slate200 = Color(0xFFE2E8F0)
@@ -70,24 +73,27 @@ fun Sidebar(
     current: Destination,
     onSelect: (Destination) -> Unit,
     onLogout: () -> Unit,
+    onClose: (() -> Unit)? = null,
 ) {
     Surface(color = MaterialTheme.colorScheme.surface, modifier = Modifier.width(256.dp).fillMaxHeight()) {
         // Aplikasi tampil edge-to-edge: jangan tertutup status bar / navigasi sistem.
         Row(Modifier.systemBarsPadding()) {
             Column(Modifier.weight(1f)) {
                 // Identitas aplikasi
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.height(64.dp).padding(horizontal = 20.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.height(64.dp).padding(start = 20.dp, end = 8.dp)) {
                     Box(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.primary),
-                    ) { Icon(Icons.Default.DateRange, null, tint = Color.White, modifier = Modifier.size(20.dp)) }
+                    ) { Icon(Icons.Outlined.CalendarMonth, null, tint = Color.White, modifier = Modifier.size(20.dp)) }
                     Spacer(Modifier.width(12.dp))
-                    Column {
+                    Column(Modifier.weight(1f)) {
                         Text(settings.appName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         settings.appSubtitle?.takeIf { it.isNotBlank() }?.let {
                             Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
+                    // HP: sidebar tampil sebagai laci; tombol tutup seperti versi web mobile.
+                    onClose?.let { IconButton(onClick = it) { Icon(Icons.Default.Close, "Tutup menu", tint = Tw.Slate500) } }
                 }
                 HorizontalDivider(color = Slate200)
 
@@ -151,7 +157,7 @@ fun Sidebar(
                             .clickable(onClick = onLogout)
                             .padding(horizontal = 12.dp, vertical = 10.dp),
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ExitToApp, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
+                        Icon(Icons.AutoMirrored.Outlined.Logout, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(12.dp))
                         Text("Keluar", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
                     }

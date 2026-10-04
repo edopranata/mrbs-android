@@ -5,20 +5,18 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
@@ -26,23 +24,14 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SmallFloatingActionButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -61,26 +50,37 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.ropekanbaru.booking.data.remote.ApiErrors
 import com.ropekanbaru.booking.data.remote.MrbsApi
 import com.ropekanbaru.booking.data.remote.RoomDto
 import com.ropekanbaru.booking.data.remote.RoomSaveRequest
-import com.ropekanbaru.booking.ui.components.CardColumns
-import com.ropekanbaru.booking.ui.components.FullSpan
-import com.ropekanbaru.booking.ui.components.Badge
+import com.ropekanbaru.booking.ui.components.CheckboxRow
 import com.ropekanbaru.booking.ui.components.ConfirmDialog
 import com.ropekanbaru.booking.ui.components.ErrorCard
-import com.ropekanbaru.booking.ui.components.FormDialog
-import com.ropekanbaru.booking.ui.components.SectionLabel
+import com.ropekanbaru.booking.ui.components.FieldLabel
+import com.ropekanbaru.booking.ui.components.FormRow
+import com.ropekanbaru.booking.ui.components.GhostButton
+import com.ropekanbaru.booking.ui.components.LabeledTextField
+import com.ropekanbaru.booking.ui.components.Pill
+import com.ropekanbaru.booking.ui.components.PrimaryButton
+import com.ropekanbaru.booking.ui.components.SecondaryButton
+import com.ropekanbaru.booking.ui.components.Tw
+import com.ropekanbaru.booking.ui.components.WebCard
+import com.ropekanbaru.booking.ui.components.WebModal
 import com.ropekanbaru.booking.ui.components.rememberLoader
 import com.ropekanbaru.booking.ui.components.roomColor
+import com.ropekanbaru.booking.ui.icons.CalendarMonth
+import com.ropekanbaru.booking.ui.icons.DeleteOutline
+import com.ropekanbaru.booking.ui.icons.EditCalendar
+import com.ropekanbaru.booking.ui.icons.Group
 import kotlinx.coroutines.launch
 
 /** Pilihan warna ruangan, sama dengan versi web. */
 private val ROOM_COLORS = listOf("#4f46e5", "#0891b2", "#059669", "#d97706", "#db2777", "#7c3aed", "#dc2626", "#475569")
 
-/** Daftar ruangan; admin bisa menambah, mengubah, menonaktifkan, dan menghapus. */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+/** Daftar ruangan per lantai seperti versi web; admin bisa menambah, mengubah, dan menghapus. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RoomsContent(
     api: MrbsApi,
@@ -97,41 +97,48 @@ fun RoomsContent(
     var deleting by remember { mutableStateOf<RoomDto?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    Box(modifier.fillMaxSize()) {
-        PullToRefreshBox(isRefreshing = rooms.refreshing, onRefresh = { rooms.load(refresh = true) }, modifier = Modifier.fillMaxSize()) {
-            val list = rooms.data
-            when {
-                rooms.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                list == null -> Column(Modifier.padding(16.dp)) { ErrorCard(rooms.error ?: "Gagal memuat ruangan.", onRetry = { rooms.load() }) }
-                else -> LazyVerticalGrid(
-                    columns = CardColumns,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 96.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    error?.let { item(span = FullSpan) { ErrorCard(it) } }
-                    list.groupBy { it.floor }.toSortedMap().forEach { (floor, floorRooms) ->
-                        item(span = FullSpan, key = "floor-$floor") { SectionLabel("LANTAI $floor") }
-                        items(floorRooms, key = { it.id }) { room ->
-                            RoomCard(
-                                room = room,
-                                isAdmin = isAdmin,
-                                onOpenSchedule = { onOpenSchedule(room.id) },
-                                onBook = { onBook(room.id) },
-                                onEdit = { editing = room },
-                                onDelete = { deleting = room },
-                            )
+    PullToRefreshBox(isRefreshing = rooms.refreshing, onRefresh = { rooms.load(refresh = true) }, modifier = modifier.fillMaxSize()) {
+        BoxWithConstraints {
+            val columns = if (maxWidth >= 600.dp) 2 else 1
+            Column(
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(if (maxWidth < 600.dp) 16.dp else 24.dp),
+            ) {
+                val list = rooms.data
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        list?.let { "${it.size} ruang rapat di ${it.map { r -> r.floor }.distinct().size} lantai" } ?: "",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Tw.Slate500,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (isAdmin) PrimaryButton("Tambah Ruangan", onClick = { creating = true }, icon = Icons.Default.Add)
+                }
+                error?.let { ErrorCard(it) }
+                when {
+                    rooms.loading -> Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                    list == null -> ErrorCard(rooms.error ?: "Gagal memuat ruangan.", onRetry = { rooms.load() })
+                    else -> list.groupBy { it.floor }.toSortedMap().forEach { (floor, floorRooms) ->
+                        Text("LANTAI $floor", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Tw.Slate500)
+                        floorRooms.chunked(columns).forEach { row ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                row.forEach { room ->
+                                    RoomCard(
+                                        room = room,
+                                        isAdmin = isAdmin,
+                                        onOpenSchedule = { onOpenSchedule(room.id) },
+                                        onBook = { onBook(room.id) },
+                                        onEdit = { editing = room },
+                                        onDelete = { deleting = room },
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                }
+                                repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                            }
                         }
                     }
                 }
             }
-        }
-        if (isAdmin) {
-            SmallFloatingActionButton(
-                onClick = { creating = true },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp).semantics { contentDescription = "Tambah Ruangan" },
-            ) { Icon(Icons.Default.Add, contentDescription = "Tambah Ruangan") }
         }
     }
 
@@ -184,49 +191,51 @@ private fun RoomCard(
     onBook: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        modifier = Modifier.fillMaxWidth().alpha(if (room.isActive) 1f else 0.7f),
-    ) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(12.dp).clip(CircleShape).background(roomColor(room.color, MaterialTheme.colorScheme.primary)))
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(room.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                    Text(
-                        "${room.code} · Lantai ${room.floor} · ${room.capacity} orang",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+    WebCard(modifier.alpha(if (room.isActive) 1f else 0.6f)) {
+        Box(Modifier.fillMaxWidth().height(6.dp).background(roomColor(room.color, Tw.Indigo600)))
+        Column(Modifier.padding(start = 20.dp, end = 12.dp, top = 16.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.Top) {
+                Column(Modifier.weight(1f).padding(end = 8.dp)) {
+                    Text(room.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = Tw.Slate900)
+                    Text("${room.code} · Lantai ${room.floor}", fontSize = 12.sp, color = Tw.Slate500)
                 }
-                if (!room.isActive) Badge("Nonaktif", MaterialTheme.colorScheme.error)
+                if (!room.isActive) {
+                    Pill("Nonaktif", Tw.Slate200, Tw.Slate600)
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(50)).background(Tw.Slate100).padding(horizontal = 8.dp, vertical = 2.dp),
+                    ) {
+                        Icon(Icons.Outlined.Group, null, tint = Tw.Slate600, modifier = Modifier.size(12.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("${room.capacity} orang", fontSize = 12.sp, color = Tw.Slate600)
+                    }
+                }
             }
-            room.description?.takeIf { it.isNotBlank() }?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+            room.description?.takeIf { it.isNotBlank() }?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = Tw.Slate600) }
             if (room.facilities.isNotEmpty()) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    room.facilities.forEach { Badge(it, MaterialTheme.colorScheme.onSurfaceVariant) }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    room.facilities.forEach { Pill(it, Tw.Indigo50, Tw.Indigo700) }
                 }
             }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (room.isActive) {
-                    OutlinedButton(onClick = onOpenSchedule) { Text("Lihat jadwal") }
-                    OutlinedButton(onClick = onBook) { Text("Pesan") }
+                    SecondaryButton("Pesan", onClick = onBook, icon = Icons.Outlined.EditCalendar)
+                    GhostButton("Jadwal", onClick = onOpenSchedule, icon = Icons.Outlined.CalendarMonth)
                 }
+                Spacer(Modifier.weight(1f))
                 if (isAdmin) {
-                    TextButton(onClick = onEdit) { Text("Ubah") }
-                    TextButton(onClick = onDelete) { Text("Hapus", color = MaterialTheme.colorScheme.error) }
+                    GhostButton("Ubah", onClick = onEdit, icon = Icons.Outlined.Edit)
+                    IconButton(onClick = onDelete) { Icon(Icons.Outlined.DeleteOutline, "Hapus ${room.name}", tint = Tw.Red600) }
                 }
             }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun RoomFormDialog(
     api: MrbsApi,
@@ -274,109 +283,80 @@ private fun RoomFormDialog(
         }
     }
 
-    FormDialog(onDismiss) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text(if (room == null) "Tambah Ruangan" else "Ubah Ruangan") },
-                    navigationIcon = { IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, "Tutup") } },
-                    actions = { TextButton(onClick = save, enabled = !saving) { Text("Simpan") } },
-                )
-            },
-            containerColor = MaterialTheme.colorScheme.background,
-        ) { padding ->
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .imePadding()
-                    .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
-            ) {
-                if (saving) LinearProgressIndicator(Modifier.fillMaxWidth())
-                error?.let { ErrorCard(it) }
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedTextField(
-                        value = code,
-                        onValueChange = { code = it.take(20) },
-                        label = { Text("Kode") },
-                        placeholder = { Text("R3A") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
-                        modifier = Modifier.weight(1f),
-                    )
-                    OutlinedTextField(
-                        value = floor,
-                        onValueChange = { floor = it.filter(Char::isDigit).take(3) },
-                        label = { Text("Lantai") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Nama ruangan") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
+    WebModal(
+        title = if (room == null) "Tambah Ruangan" else "Ubah Ruangan",
+        onDismiss = onDismiss,
+        footer = {
+            SecondaryButton("Batal", onClick = onDismiss)
+            PrimaryButton(if (saving) "Menyimpan…" else "Simpan", onClick = save, enabled = !saving)
+        },
+    ) {
+        error?.let { ErrorCard(it) }
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            LabeledTextField(
+                label = "Kode",
+                value = code,
+                onValueChange = { code = it.take(20) },
+                placeholder = "R3A",
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
+                modifier = Modifier.weight(1f),
+            )
+            LabeledTextField(
+                label = "Lantai",
+                value = floor,
+                onValueChange = { floor = it.filter(Char::isDigit).take(3) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.weight(1f),
+            )
+        }
+        LabeledTextField(
+            label = "Nama ruangan",
+            value = name,
+            onValueChange = { name = it },
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
+        )
+        FormRow(
+            { m ->
+                LabeledTextField(
+                    label = "Kapasitas (orang)",
                     value = capacity,
                     onValueChange = { capacity = it.filter(Char::isDigit).take(4) },
-                    label = { Text("Kapasitas (orang)") },
-                    singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = m,
                 )
-                OutlinedTextField(
-                    value = facilities,
-                    onValueChange = { facilities = it },
-                    label = { Text("Fasilitas (pisahkan dengan koma)") },
-                    placeholder = { Text("Proyektor, AC, Whiteboard") },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    label = { Text("Deskripsi") },
-                    minLines = 2,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Text("Warna", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    ROOM_COLORS.forEach { c ->
-                        val selected = c.equals(color, ignoreCase = true)
-                        Box(
-                            Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .border(if (selected) 3.dp else 0.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
-                                .padding(if (selected) 5.dp else 0.dp)
-                                .clip(CircleShape)
-                                .background(roomColor(c, MaterialTheme.colorScheme.primary))
-                                .clickable { color = c }
-                                .semantics { contentDescription = "Warna $c" + if (selected) " (dipilih)" else "" },
-                        )
+            },
+            { m ->
+                Column(m) {
+                    FieldLabel("Warna")
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
+                        ROOM_COLORS.forEach { c ->
+                            val selected = c.equals(color, ignoreCase = true)
+                            Box(
+                                Modifier
+                                    .size(32.dp)
+                                    .then(if (selected) Modifier.border(2.dp, Tw.Slate900, CircleShape).padding(3.dp) else Modifier)
+                                    .clip(CircleShape)
+                                    .background(roomColor(c, Tw.Indigo600))
+                                    .clickable { color = c }
+                                    .semantics { contentDescription = "Warna $c" + if (selected) " (dipilih)" else "" },
+                            )
+                        }
                     }
                 }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().toggleable(value = active, role = Role.Switch, onValueChange = { active = it }),
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Ruangan aktif", fontWeight = FontWeight.Medium)
-                        Text(
-                            "Ruangan nonaktif tidak tampil di jadwal dan tidak bisa dipesan.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(checked = active, onCheckedChange = null)
-                }
-            }
-        }
+            },
+        )
+        LabeledTextField(
+            label = "Fasilitas (pisahkan dengan koma)",
+            value = facilities,
+            onValueChange = { facilities = it },
+            placeholder = "Proyektor, AC, Whiteboard",
+        )
+        LabeledTextField(label = "Deskripsi", value = description, onValueChange = { description = it }, singleLine = false, minLines = 2)
+        CheckboxRow(
+            label = "Ruangan aktif (dapat dipesan)",
+            checked = active,
+            onCheckedChange = { active = it },
+            description = "Ruangan nonaktif tidak tampil di jadwal dan tidak bisa dipesan.",
+        )
     }
 }

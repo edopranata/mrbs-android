@@ -1,42 +1,31 @@
 package com.ropekanbaru.booking.ui.admin
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SmallFloatingActionButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -48,32 +37,49 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.ropekanbaru.booking.data.remote.ApiErrors
 import com.ropekanbaru.booking.data.remote.MrbsApi
 import com.ropekanbaru.booking.data.remote.UserDto
 import com.ropekanbaru.booking.data.remote.UserSaveRequest
-import com.ropekanbaru.booking.ui.components.CardColumns
-import com.ropekanbaru.booking.ui.components.FullSpan
-import com.ropekanbaru.booking.ui.components.Badge
+import com.ropekanbaru.booking.ui.components.CheckboxRow
 import com.ropekanbaru.booking.ui.components.ConfirmDialog
-import com.ropekanbaru.booking.ui.components.EmptyText
+import com.ropekanbaru.booking.ui.components.EmptyState
 import com.ropekanbaru.booking.ui.components.ErrorCard
-import com.ropekanbaru.booking.ui.components.FormDialog
-import com.ropekanbaru.booking.ui.components.LabeledDropdown
+import com.ropekanbaru.booking.ui.components.FieldLabel
+import com.ropekanbaru.booking.ui.components.FormRow
+import com.ropekanbaru.booking.ui.components.LabeledTextField
+import com.ropekanbaru.booking.ui.components.Pill
+import com.ropekanbaru.booking.ui.components.PrimaryButton
+import com.ropekanbaru.booking.ui.components.SecondaryButton
+import com.ropekanbaru.booking.ui.components.SelectField
+import com.ropekanbaru.booking.ui.components.Tw
+import com.ropekanbaru.booking.ui.components.WebCard
+import com.ropekanbaru.booking.ui.components.WebModal
 import com.ropekanbaru.booking.ui.components.rememberPagedLoader
-import com.ropekanbaru.booking.ui.theme.Emerald600
+import com.ropekanbaru.booking.ui.icons.DeleteOutline
+import com.ropekanbaru.booking.ui.icons.Group
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** Level user beserta labelnya, urut dari tertinggi. */
 private val ROLES = listOf("system_admin" to "System Admin", "admin" to "Admin", "user" to "User")
 private fun roleLabel(role: String) = ROLES.firstOrNull { it.first == role }?.second ?: role
+
+/** Warna badge level, sama dengan web (rose / purple / slate). */
+@Composable
+private fun RoleBadge(role: String, label: String) = when (role) {
+    "system_admin" -> Pill(label, Color(0xFFFFF1F2), Color(0xFFBE123C))
+    "admin" -> Pill(label, Color(0xFFFAF5FF), Color(0xFF7E22CE))
+    else -> Pill(label, Tw.Slate100, Tw.Slate600)
+}
 
 /** Manajemen user (Admin & System Admin). Hanya System Admin yang boleh mengelola akun System Admin. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -101,65 +107,73 @@ fun UsersContent(
     val users = rememberPagedLoader(query, role) { page -> api.users(search = query.ifEmpty { null }, role = role, page = page) }
     val canManage = { u: UserDto -> currentUser.isSystemAdmin || !u.isSystemAdmin }
 
-    Box(modifier.fillMaxSize()) {
-        PullToRefreshBox(isRefreshing = users.refreshing, onRefresh = { users.reload(refresh = true) }, modifier = Modifier.fillMaxSize()) {
-            LazyVerticalGrid(
-                    columns = CardColumns,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 96.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                item(span = FullSpan) {
-                    OutlinedTextField(
-                        value = search,
-                        onValueChange = { search = it },
-                        placeholder = { Text("Cari nama, username, email, atau divisi…") },
-                        leadingIcon = { Icon(Icons.Default.Search, null) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                item(span = FullSpan) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                        FilterChip(selected = role == null, onClick = { role = null }, label = { Text("Semua level") })
-                        ROLES.forEach { (value, label) ->
-                            FilterChip(selected = role == value, onClick = { role = value }, label = { Text(label) })
+    PullToRefreshBox(isRefreshing = users.refreshing, onRefresh = { users.reload(refresh = true) }, modifier = modifier.fillMaxSize()) {
+        BoxWithConstraints {
+            val wide = maxWidth >= 600.dp
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(if (wide) 24.dp else 16.dp)) {
+                WebCard(Modifier.fillMaxWidth()) {
+                    // Filter & tombol tambah (bertumpuk di HP, sebaris di tablet)
+                    val searchField: @Composable (Modifier) -> Unit = { m ->
+                        LabeledTextField(
+                            label = "Cari",
+                            value = search,
+                            onValueChange = { search = it },
+                            placeholder = "Cari nama, username, email, atau department…",
+                            trailingIcon = { Icon(Icons.Outlined.Search, null, tint = Tw.Slate400) },
+                            modifier = m,
+                        )
+                    }
+                    val roleField: @Composable (Modifier) -> Unit = { m ->
+                        SelectField(
+                            value = role?.let(::roleLabel) ?: "Semua level",
+                            options = listOf<String?>(null) + ROLES.map { it.first },
+                            label = { it?.let(::roleLabel) ?: "Semua level" },
+                            onSelect = { role = it },
+                            modifier = m,
+                        )
+                    }
+                    if (wide) {
+                        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(16.dp)) {
+                            searchField(Modifier.weight(1f))
+                            roleField(Modifier.width(180.dp))
+                            PrimaryButton("Tambah User", onClick = { creating = true }, icon = Icons.Default.Add)
+                        }
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(16.dp)) {
+                            searchField(Modifier.fillMaxWidth())
+                            roleField(Modifier.fillMaxWidth())
+                            PrimaryButton("Tambah User", onClick = { creating = true }, icon = Icons.Default.Add, modifier = Modifier.fillMaxWidth())
                         }
                     }
-                }
-                error?.let { item(span = FullSpan) { ErrorCard(it) } }
-                when {
-                    users.loading -> item(span = FullSpan) { Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
-                    !users.loaded -> item(span = FullSpan) { ErrorCard(users.error ?: "Gagal memuat user.", onRetry = { users.reload() }) }
-                    else -> {
-                        item(span = FullSpan) { Text("${users.total} user", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                        if (users.items.isEmpty()) item(span = FullSpan) { EmptyText("Tidak ada user.") }
-                        items(users.items, key = { it.id }) { u ->
-                            UserCard(
-                                user = u,
-                                isSelf = u.id == currentUser.id,
-                                canManage = canManage(u),
-                                onEdit = { editing = u },
-                                onDelete = { deleting = u },
-                            )
-                        }
-                        users.error?.let { item(span = FullSpan) { ErrorCard(it) } }
-                        if (users.hasMore) {
-                            item(span = FullSpan) {
-                                OutlinedButton(onClick = users::loadMore, enabled = !users.loadingMore, modifier = Modifier.fillMaxWidth()) {
-                                    Text(if (users.loadingMore) "Memuat…" else "Muat lebih banyak")
-                                }
+                    HorizontalDivider(color = Tw.Slate200)
+
+                    error?.let { Box(Modifier.padding(16.dp)) { ErrorCard(it) } }
+                    when {
+                        users.loading -> Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                        !users.loaded -> Box(Modifier.padding(16.dp)) { ErrorCard(users.error ?: "Gagal memuat user.", onRetry = { users.reload() }) }
+                        users.items.isEmpty() -> EmptyState(Icons.Outlined.Group, "Tidak ada user")
+                        else -> {
+                            users.items.forEachIndexed { i, u ->
+                                if (i > 0) HorizontalDivider(color = Tw.Slate100)
+                                UserRow(
+                                    user = u,
+                                    isSelf = u.id == currentUser.id,
+                                    canManage = canManage(u),
+                                    onEdit = { editing = u },
+                                    onDelete = { deleting = u },
+                                )
+                            }
+                            users.error?.let { Box(Modifier.padding(16.dp)) { ErrorCard(it) } }
+                            HorizontalDivider(color = Tw.Slate200)
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+                                Text("${users.items.size} dari ${users.total} user", style = MaterialTheme.typography.bodySmall, color = Tw.Slate500, modifier = Modifier.weight(1f))
+                                if (users.hasMore) SecondaryButton(if (users.loadingMore) "Memuat…" else "Muat lebih banyak", onClick = users::loadMore, enabled = !users.loadingMore)
                             }
                         }
                     }
                 }
             }
         }
-        SmallFloatingActionButton(
-            onClick = { creating = true },
-            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
-        ) { Icon(Icons.Default.Add, contentDescription = "Tambah User") }
     }
 
     if (creating || editing != null) {
@@ -203,47 +217,36 @@ fun UsersContent(
 }
 
 @Composable
-private fun UserCard(user: UserDto, isSelf: Boolean, canManage: Boolean, onEdit: () -> Unit, onDelete: () -> Unit) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        modifier = Modifier.fillMaxWidth().alpha(if (user.isActive) 1f else 0.7f),
-    ) {
-        Column(Modifier.padding(start = 14.dp, end = 6.dp, top = 12.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+private fun UserRow(user: UserDto, isSelf: Boolean, canManage: Boolean, onEdit: () -> Unit, onDelete: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 12.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(user.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = Tw.Slate900, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                if (isSelf) {
+                    Spacer(Modifier.width(6.dp))
+                    Pill("Anda", Tw.Slate100, Tw.Slate600)
+                }
+            }
+            Text("@${user.username}" + (user.email?.let { " · $it" } ?: ""), fontSize = 12.sp, color = Tw.Slate500, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(user.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f, fill = false))
-                if (isSelf) Badge("Anda", MaterialTheme.colorScheme.primary)
-            }
-            Text(
-                listOfNotNull(user.username, user.department).joinToString(" · "),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Badge(roleLabel(user.role), if (user.isAdmin) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-                if (user.isActive) Badge("Aktif", Emerald600) else Badge("Nonaktif", MaterialTheme.colorScheme.error)
-                user.bookingsCount?.let {
-                    Text("$it booking", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-            if (canManage) {
-                Row {
-                    TextButton(onClick = onEdit) { Text("Ubah") }
-                    if (!isSelf) TextButton(onClick = onDelete) { Text("Hapus", color = MaterialTheme.colorScheme.error) }
-                }
-            } else {
+                RoleBadge(user.role, user.roleLabel.ifBlank { roleLabel(user.role) })
+                if (user.isActive) Pill("Aktif", Tw.Emerald50, Tw.Emerald700) else Pill("Nonaktif", Tw.Red50, Tw.Red700)
                 Text(
-                    "Hanya System Admin yang dapat mengelola akun ini.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 8.dp),
+                    listOfNotNull(user.department, user.bookingsCount?.let { "$it booking" }).joinToString(" · "),
+                    fontSize = 12.sp,
+                    color = Tw.Slate500,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
+        }
+        if (canManage) {
+            IconButton(onClick = onEdit) { Icon(Icons.Outlined.Edit, "Ubah ${user.name}", tint = Tw.Slate600) }
+            if (!isSelf) IconButton(onClick = onDelete) { Icon(Icons.Outlined.DeleteOutline, "Hapus ${user.name}", tint = Tw.Red600) }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun UserFormDialog(
     api: MrbsApi,
@@ -265,8 +268,8 @@ private fun UserFormDialog(
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    // Admin biasa tidak boleh memberi level System Admin.
-    val roleOptions = ROLES.map { it.first }.filter { currentUser.isSystemAdmin || it != "system_admin" }
+    // Admin biasa tidak boleh memberi level System Admin (kecuali akun itu memang System Admin).
+    val roleOptions = listOf("user", "admin") + if (currentUser.isSystemAdmin || user?.role == "system_admin") listOf("system_admin") else emptyList()
 
     val save: () -> Unit = save@{
         error = when {
@@ -295,90 +298,55 @@ private fun UserFormDialog(
         }
     }
 
-    FormDialog(onDismiss) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text(if (user == null) "Tambah User" else "Ubah User") },
-                    navigationIcon = { IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, "Tutup") } },
-                    actions = { TextButton(onClick = save, enabled = !saving) { Text("Simpan") } },
-                )
+    WebModal(
+        title = if (user == null) "Tambah User" else "Ubah User",
+        onDismiss = onDismiss,
+        footer = {
+            SecondaryButton("Batal", onClick = onDismiss)
+            PrimaryButton(if (saving) "Menyimpan…" else "Simpan", onClick = save, enabled = !saving)
+        },
+    ) {
+        error?.let { ErrorCard(it) }
+        LabeledTextField(label = "Nama", value = name, onValueChange = { name = it })
+        LabeledTextField(
+            label = "Username (untuk login)",
+            value = username,
+            onValueChange = { username = it.lowercase().filter { c -> c.isLetterOrDigit() || c in "._-" }.take(50) },
+            placeholder = "mis. budi.santoso",
+            hint = "Huruf kecil, angka, titik, garis bawah, atau strip; tanpa spasi.",
+        )
+        LabeledTextField(label = "Email", value = email, onValueChange = { email = it }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
+        LabeledTextField(
+            label = if (user == null) "Password" else "Password (kosongkan jika tidak diubah)",
+            value = password,
+            onValueChange = { password = it },
+            hint = if (user == null) "Minimal 8 karakter." else null,
+            visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+        )
+        FormRow(
+            { m ->
+                Column(m) {
+                    FieldLabel("Level")
+                    // Tidak boleh mengubah level akun sendiri: tampil sebagai pilihan nonaktif.
+                    SelectField(roleLabel(role), if (isSelf) emptyList() else roleOptions, ::roleLabel, { role = it }, Modifier.fillMaxWidth())
+                    if (isSelf) Text("Level akun sendiri tidak dapat diubah.", style = MaterialTheme.typography.bodySmall, color = Tw.Slate500, modifier = Modifier.padding(top = 4.dp))
+                }
             },
-            containerColor = MaterialTheme.colorScheme.background,
-        ) { padding ->
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .imePadding()
-                    .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
-            ) {
-                if (saving) LinearProgressIndicator(Modifier.fillMaxWidth())
-                error?.let { ErrorCard(it) }
-                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Nama") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(
-                    value = username,
-                    onValueChange = { username = it.lowercase().filter { c -> c.isLetterOrDigit() || c in "._-" }.take(50) },
-                    label = { Text("Username") },
-                    placeholder = { Text("mis. budi.santoso") },
-                    supportingText = { Text("2–50 karakter: huruf, angka, titik, garis bawah, atau strip") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = email,
-                    onValueChange = { email = it },
-                    label = { Text("Email") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it },
-                    label = { Text(if (user == null) "Password" else "Password baru (opsional)") },
-                    supportingText = { Text(if (user == null) "Minimal 8 karakter." else "Kosongkan bila tidak diubah.") },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                if (isSelf) {
-                    Text(
-                        "Level: ${roleLabel(role)} (tidak dapat mengubah level akun sendiri)",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                } else {
-                    LabeledDropdown(label = "Level", value = role, options = roleOptions, onSelect = { role = it }, display = ::roleLabel)
-                }
-                OutlinedTextField(value = department, onValueChange = { department = it }, label = { Text("Divisi") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(
-                    value = phone,
-                    onValueChange = { phone = it },
-                    label = { Text("No. telepon") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                if (!isSelf) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth().toggleable(value = active, role = Role.Switch, onValueChange = { active = it }),
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text("Akun aktif", fontWeight = FontWeight.Medium)
-                            Text(
-                                "Akun nonaktif tidak bisa login dan langsung dikeluarkan dari semua perangkat.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Switch(checked = active, onCheckedChange = null)
-                    }
-                }
-            }
-        }
+            { m -> LabeledTextField(label = "Department", value = department, onValueChange = { department = it }, modifier = m) },
+        )
+        LabeledTextField(
+            label = "No. telepon",
+            value = phone,
+            onValueChange = { phone = it },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+        )
+        CheckboxRow(
+            label = "Akun aktif",
+            checked = active,
+            onCheckedChange = { active = it },
+            description = if (isSelf) "Akun sendiri tidak dapat dinonaktifkan." else "Akun nonaktif tidak bisa login dan langsung dikeluarkan dari semua perangkat.",
+            enabled = !isSelf,
+        )
     }
 }

@@ -1,15 +1,12 @@
 package com.ropekanbaru.booking.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 // Warna sama dengan versi web (Tailwind indigo & slate).
 val Indigo600 = Color(0xFF4F46E5)
-val Indigo400 = Color(0xFF818CF8)
 val Emerald600 = Color(0xFF059669)
 val Red600 = Color(0xFFDC2626)
 
@@ -35,20 +32,8 @@ private val LightColors = lightColorScheme(
     onErrorContainer = Color(0xFF991B1B),
 )
 
-private val DarkColors = darkColorScheme(
-    primary = Indigo400,
-    onPrimary = Color(0xFF1E1B4B),
-    primaryContainer = Color(0xFF3730A3),
-    onPrimaryContainer = Color(0xFFE0E7FF),
-    background = Color(0xFF0F172A),
-    surface = Color(0xFF1E293B),
-    surfaceVariant = Color(0xFF334155),
-    onSurfaceVariant = Color(0xFF94A3B8),
-    outline = Color(0xFF475569),
-    error = Color(0xFFF87171),
-)
-
+/** Selalu terang, sama dengan versi web (yang tidak punya mode gelap). */
 @Composable
-fun MrbsTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = if (darkTheme) DarkColors else LightColors, content = content)
+fun MrbsTheme(content: @Composable () -> Unit) {
+    MaterialTheme(colorScheme = LightColors, content = content)
 }

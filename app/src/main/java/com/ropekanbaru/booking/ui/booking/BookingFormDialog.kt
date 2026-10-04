@@ -1,46 +1,34 @@
 package com.ropekanbaru.booking.ui.booking
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -53,26 +41,53 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.ropekanbaru.booking.data.TimeSlots
 import com.ropekanbaru.booking.data.remote.AvailabilityRoomDto
 import com.ropekanbaru.booking.data.remote.MrbsApi
 import com.ropekanbaru.booking.data.remote.OccurrenceDto
 import com.ropekanbaru.booking.data.remote.SettingsDto
 import com.ropekanbaru.booking.ui.components.DatePickerModal
 import com.ropekanbaru.booking.ui.components.ErrorCard
-import com.ropekanbaru.booking.ui.components.FormDialog
-import com.ropekanbaru.booking.ui.components.OptionDropdown
-import com.ropekanbaru.booking.ui.components.bookingTypeColor
+import com.ropekanbaru.booking.ui.components.FieldLabel
+import com.ropekanbaru.booking.ui.components.LabeledTextField
+import com.ropekanbaru.booking.ui.components.Pill
+import com.ropekanbaru.booking.ui.components.PrimaryButton
+import com.ropekanbaru.booking.ui.components.SecondaryButton
+import com.ropekanbaru.booking.ui.components.Segmented
+import com.ropekanbaru.booking.ui.components.SelectField
+import com.ropekanbaru.booking.ui.components.Tw
+import com.ropekanbaru.booking.ui.components.WebModal
+import com.ropekanbaru.booking.ui.components.formatDuration
 import com.ropekanbaru.booking.ui.components.friendlyDate
+import com.ropekanbaru.booking.ui.components.isWideLayout
 import com.ropekanbaru.booking.ui.components.roomColor
-import com.ropekanbaru.booking.ui.theme.Emerald600
+import com.ropekanbaru.booking.ui.icons.CalendarMonth
+import com.ropekanbaru.booking.ui.icons.Cancel
+import com.ropekanbaru.booking.ui.icons.Group
+import com.ropekanbaru.booking.ui.icons.Repeat
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+private val localeId = Locale.forLanguageTag("id-ID")
+private val inputDate = DateTimeFormatter.ofPattern("dd/MM/yyyy")
+private val weekdayName = DateTimeFormatter.ofPattern("EEEE", localeId)
+private val dayMonth = DateTimeFormatter.ofPattern("d MMM", localeId)
+private val Amber800 = Color(0xFF92400E)
+private val Amber900 = Color(0xFF78350F)
+
+/** Form Buat/Ubah Booking, mengikuti modal booking versi web. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun BookingFormDialog(
     api: MrbsApi,
@@ -85,166 +100,147 @@ fun BookingFormDialog(
     val scope = rememberCoroutineScope()
     val form = remember { BookingFormState(api, scope, settings, isAdmin, defaults) }
     var pickDate by remember { mutableStateOf(false) }
-    val submit: () -> Unit = {
-        scope.launch { form.submit()?.let(onSaved) }
-    }
+    val submit: () -> Unit = { scope.launch { form.submit()?.let(onSaved) } }
+    val wide = isWideLayout()
 
-    FormDialog(onDismiss) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text(if (form.isEditing) "Ubah Booking" else "Buat Booking") },
-                    navigationIcon = { IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, "Tutup") } },
-                    actions = { TextButton(onClick = submit, enabled = !form.saving) { Text("Simpan") } },
+    WebModal(
+        title = if (form.isEditing) "Ubah Booking" else "Buat Booking Baru",
+        onDismiss = onDismiss,
+        maxWidth = 720.dp,
+        footer = {
+            val room = form.selectedRoom
+            if (wide && room != null) {
+                Text(
+                    "${room.name} (Lt ${room.floor}) · ${form.start}–${form.end}" + if (form.effectiveWeeks > 1) " · ${form.effectiveWeeks}× mingguan" else "",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Tw.Slate500,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
                 )
+            }
+            SecondaryButton("Batal", onClick = onDismiss)
+            PrimaryButton(
+                if (form.saving) "Menyimpan…" else if (form.isEditing) "Simpan Perubahan" else "Buat Booking",
+                onClick = submit,
+                enabled = !form.saving,
+            )
+        },
+    ) {
+        form.error?.let { ErrorCard(it) }
+
+        LabeledTextField(
+            label = "Judul rapat",
+            value = form.title,
+            onValueChange = { form.title = it },
+            placeholder = "mis. Rapat Koordinasi Mingguan",
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+        )
+
+        // Tanggal (baris sendiri di HP), lalu jam mulai & selesai
+        Column {
+            FieldLabel("Tanggal")
+            SelectField(
+                value = form.date.format(inputDate),
+                options = emptyList<Unit>(),
+                label = { "" },
+                onSelect = {},
+                leadingIcon = Icons.Outlined.CalendarMonth,
+                modifier = Modifier.fillMaxWidth().clickable { pickDate = true }.semantics { contentDescription = "Tanggal: ${friendlyDate(form.date.toString())}" },
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.weight(1f)) {
+                FieldLabel("Mulai")
+                SelectField(form.start ?: "--:--", form.startOptions, { it }, form::updateStart, Modifier.fillMaxWidth())
+            }
+            Column(Modifier.weight(1f)) {
+                FieldLabel("Selesai")
+                SelectField(form.end ?: "--:--", form.endOptions, { it }, form::updateEnd, Modifier.fillMaxWidth())
+            }
+        }
+        val duration = form.start?.let { s -> form.end?.let { e -> TimeSlots.toMinutes(e) - TimeSlots.toMinutes(s) } }
+        Text(
+            when {
+                form.startOptions.isEmpty() -> "Jam operasional hari ini sudah lewat, silakan pilih tanggal lain."
+                duration != null && duration > 0 -> "Durasi ${formatDuration(duration)} · Jam operasional ${settings.openTime}–${settings.closeTime}"
+                else -> "Jam operasional ${settings.openTime}–${settings.closeTime}"
             },
-            containerColor = MaterialTheme.colorScheme.background,
-        ) { padding ->
-            Column(
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .imePadding()
-                    .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
-            ) {
-                if (form.saving) LinearProgressIndicator(Modifier.fillMaxWidth())
-                form.error?.let { ErrorCard(it) }
+            style = MaterialTheme.typography.bodySmall,
+            color = if (form.startOptions.isEmpty()) Tw.Red600 else Tw.Slate500,
+        )
 
-                OutlinedTextField(
-                    value = form.title,
-                    onValueChange = { form.title = it },
-                    label = { Text("Judul rapat") },
-                    placeholder = { Text("mis. Rapat Koordinasi Mingguan") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+        // Berulang mingguan (hanya saat membuat; mengubah satu booking tidak mengubah seri)
+        if (settings.maxRepeatWeeks > 1 && !form.isEditing) RepeatBox(form)
+
+        // Jenis rapat & jumlah peserta (berdampingan di tablet)
+        val typeField: @Composable (Modifier) -> Unit = { m ->
+            Column(m) {
+                FieldLabel("Jenis rapat")
+                val types = listOf("internal" to "Internal", "external" to "Eksternal")
+                Segmented(
+                    options = types.map { it.second },
+                    selected = types.indexOfFirst { it.first == form.type },
+                    onSelect = { form.type = types[it].first },
+                    selectedColor = Color(0xFF1E293B),
                     modifier = Modifier.fillMaxWidth(),
                 )
+            }
+        }
+        val participantsField: @Composable (Modifier) -> Unit = { m ->
+            LabeledTextField(
+                label = "Jumlah peserta",
+                value = form.participants,
+                onValueChange = form::updateParticipants,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = m,
+            )
+        }
+        if (wide) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                typeField(Modifier.weight(1f))
+                participantsField(Modifier.weight(1f))
+            }
+        } else {
+            typeField(Modifier.fillMaxWidth())
+            participantsField(Modifier.fillMaxWidth())
+        }
 
-                // Tanggal
-                OutlinedButton(onClick = { pickDate = true }, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Default.DateRange, null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Tanggal: ${friendlyDate(form.date.toString())}", modifier = Modifier.weight(1f))
-                }
-
-                // Jam
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    TimeDropdown("Mulai", form.start, form.startOptions, form::updateStart, Modifier.weight(1f))
-                    TimeDropdown("Selesai", form.end, form.endOptions, form::updateEnd, Modifier.weight(1f))
-                }
-                if (form.startOptions.isEmpty()) {
-                    Text("Jam operasional hari ini sudah lewat. Pilih tanggal lain.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                } else {
-                    Text(
-                        "Jam operasional ${settings.openTime}–${settings.closeTime}, interval ${settings.slotMinutes} menit",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-
-                // Peserta & jenis rapat
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        value = form.participants,
-                        onValueChange = form::updateParticipants,
-                        label = { Text("Peserta") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.width(110.dp),
-                    )
-                    listOf("internal" to "Internal", "external" to "Eksternal").forEach { (value, label) ->
-                        FilterChip(
-                            selected = form.type == value,
-                            onClick = { form.type = value },
-                            label = { Text(label) },
-                            leadingIcon = { Box(Modifier.size(10.dp).clip(CircleShape).background(bookingTypeColor(value))) },
-                        )
-                    }
-                }
-
-                // Berulang mingguan (hanya saat membuat; mengubah satu booking tidak mengubah seri)
-                if (settings.maxRepeatWeeks > 1 && !form.isEditing) {
-                    Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surface) {
-                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.toggleable(value = form.repeat, role = Role.Switch, onValueChange = form::updateRepeat),
-                            ) {
-                                Column(Modifier.weight(1f)) {
-                                    Text("↻ Ulangi setiap minggu", fontWeight = FontWeight.Medium)
-                                    Text(
-                                        if (form.repeat) "Sampai ${friendlyDate(form.lastDate.toString())}" else "Hari & jam yang sama setiap minggu",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                                Switch(checked = form.repeat, onCheckedChange = null)
-                            }
-                            if (form.repeat) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text("Selama", modifier = Modifier.padding(end = 8.dp))
-                                    OptionDropdown(
-                                        value = "${form.repeatWeeks} minggu",
-                                        options = form.weekOptions,
-                                        label = { "$it minggu" },
-                                        onSelect = form::updateRepeatWeeks,
-                                    )
-                                }
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.toggleable(value = form.skipConflicts, role = Role.Checkbox, onValueChange = { form.skipConflicts = it }),
-                                ) {
-                                    Checkbox(checked = form.skipConflicts, onCheckedChange = null)
-                                    Text("Lewati tanggal yang bentrok", style = MaterialTheme.typography.bodyMedium)
-                                }
-                                if (form.occurrences.isNotEmpty()) OccurrenceList(form.occurrences, form.skipConflicts)
-                            }
+        // Ruangan
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                FieldLabel("Pilih ruangan", modifier = Modifier.weight(1f))
+                if (form.checking) CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+            }
+            form.rooms.groupBy { it.floor }.toSortedMap().forEach { (floor, rooms) ->
+                Text("LANTAI $floor", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Tw.Slate500)
+                rooms.chunked(if (wide) 2 else 1).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        row.forEach { room ->
+                            RoomOption(
+                                room = room,
+                                selected = form.roomId == room.id,
+                                selectable = form.isSelectable(room),
+                                weeks = form.effectiveWeeks,
+                                onSelect = { form.selectRoom(room.id) },
+                                modifier = Modifier.weight(1f),
+                            )
                         }
-                    }
-                }
-
-                // Ruangan
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Pilih ruangan", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                    if (form.checking) CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
-                }
-                form.rooms.groupBy { it.floor }.toSortedMap().forEach { (floor, rooms) ->
-                    Text("LANTAI $floor", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                    rooms.forEach { room ->
-                        RoomOption(
-                            room = room,
-                            selected = form.roomId == room.id,
-                            selectable = form.isSelectable(room),
-                            weeks = form.effectiveWeeks,
-                            onSelect = { form.selectRoom(room.id) },
-                        )
-                    }
-                }
-                if (form.rooms.isEmpty() && !form.checking) {
-                    Text("Memuat daftar ruangan…", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-
-                OutlinedTextField(
-                    value = form.description,
-                    onValueChange = { form.description = it },
-                    label = { Text("Catatan / agenda (opsional)") },
-                    minLines = 3,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-
-                Button(onClick = submit, enabled = !form.saving, modifier = Modifier.fillMaxWidth().height(52.dp)) {
-                    if (form.saving) {
-                        CircularProgressIndicator(strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp))
-                    } else {
-                        val room = form.selectedRoom
-                        val action = if (form.isEditing) "Simpan Perubahan" else "Buat Booking"
-                        Text(if (room != null) "$action · ${room.name}" else action)
+                        if (wide && row.size == 1) Spacer(Modifier.weight(1f))
                     }
                 }
             }
+            if (form.rooms.isEmpty() && !form.checking) Text("Memuat daftar ruangan…", style = MaterialTheme.typography.bodyMedium, color = Tw.Slate500)
         }
+
+        LabeledTextField(
+            label = "Catatan / agenda (opsional)",
+            value = form.description,
+            onValueChange = { form.description = it },
+            placeholder = "Agenda rapat, kebutuhan konsumsi, dsb.",
+            singleLine = false,
+            minLines = 3,
+        )
     }
 
     if (pickDate) {
@@ -258,43 +254,79 @@ fun BookingFormDialog(
     }
 }
 
+/** Kotak "Ulangi setiap minggu" seperti web: sakelar, jumlah minggu, dan status tiap tanggal. */
 @Composable
-private fun TimeDropdown(label: String, value: String?, options: List<String>, onSelect: (String) -> Unit, modifier: Modifier = Modifier) {
-    Column(modifier) {
-        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        OptionDropdown(value = value ?: "--:--", options = options, label = { it }, onSelect = onSelect, modifier = Modifier.fillMaxWidth())
-    }
-}
-
-/** Daftar tanggal booking mingguan beserta status tiap tanggal untuk ruangan terpilih. */
-@Composable
-private fun OccurrenceList(items: List<OccurrenceDto>, skipConflicts: Boolean) {
-    val conflicts = items.count { !it.available }
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-            if (conflicts == 0) "Semua ${items.size} tanggal tersedia"
-            else if (skipConflicts) "${items.size - conflicts} dari ${items.size} tanggal akan dibuat ($conflicts dilewati)"
-            else "$conflicts tanggal bentrok — aktifkan \"Lewati tanggal yang bentrok\" atau ganti jam/ruangan",
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = if (conflicts == 0) Emerald600 else MaterialTheme.colorScheme.error,
-        )
-        items.forEach { o ->
-            Row(verticalAlignment = Alignment.Top) {
-                Text(
-                    if (o.available) "✓" else "✕",
-                    color = if (o.available) Emerald600 else MaterialTheme.colorScheme.error,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.width(20.dp),
+private fun RepeatBox(form: BookingFormState) {
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = if (form.repeat) Tw.Indigo50 else Color.White,
+        border = BorderStroke(1.dp, if (form.repeat) Color(0xFFC7D2FE) else Tw.Slate200),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().toggleable(value = form.repeat, role = Role.Switch, onValueChange = form::updateRepeat),
+            ) {
+                Switch(
+                    checked = form.repeat,
+                    onCheckedChange = null,
+                    colors = SwitchDefaults.colors(
+                        checkedTrackColor = Tw.Indigo600,
+                        uncheckedTrackColor = Tw.Slate300,
+                        uncheckedThumbColor = Color.White,
+                        uncheckedBorderColor = Color.Transparent,
+                    ),
                 )
+                Spacer(Modifier.width(12.dp))
                 Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Outlined.Repeat, null, tint = Tw.Indigo600, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Ulangi setiap minggu", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = Tw.Slate900)
+                    }
                     Text(
-                        "${friendlyDate(o.date)}, ${o.startTime}–${o.endTime}",
+                        "Setiap ${form.date.format(weekdayName).replaceFirstChar { it.titlecase(localeId) }}, ${form.start ?: "--:--"}–${form.end ?: "--:--"}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (o.available) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = Tw.Slate500,
                     )
-                    if (!o.available && o.reason != null) {
-                        Text(o.reason, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                }
+            }
+            if (form.repeat) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Selama", style = MaterialTheme.typography.bodyMedium, color = Tw.Slate700)
+                    SelectField("${form.repeatWeeks} minggu", form.weekOptions, { "$it minggu" }, form::updateRepeatWeeks, Modifier.width(130.dp))
+                    Text("· sampai ${friendlyDate(form.lastDate.toString())}", style = MaterialTheme.typography.bodyMedium, color = Tw.Slate500)
+                }
+                if (form.roomId == null) {
+                    Text("Pilih ruangan untuk melihat ketersediaan tiap tanggal.", style = MaterialTheme.typography.bodySmall, color = Tw.Slate500)
+                } else if (form.occurrences.isNotEmpty()) {
+                    OccurrenceChips(form.occurrences)
+                    val blocked = form.occurrences.filter { !it.available }
+                    if (blocked.isEmpty()) {
+                        Text("Semua ${form.occurrences.size} tanggal tersedia", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Tw.Emerald600)
+                    } else {
+                        Surface(shape = RoundedCornerShape(6.dp), color = Tw.Amber50, modifier = Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                blocked.take(3).forEach {
+                                    Text("${friendlyDate(it.date)}: ${it.reason ?: "Tidak tersedia"}", fontSize = 12.sp, color = Amber800)
+                                }
+                                if (blocked.size > 3) Text("dan ${blocked.size - 3} tanggal lainnya.", fontSize = 12.sp, color = Amber800)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.toggleable(value = form.skipConflicts, role = Role.Checkbox, onValueChange = { form.skipConflicts = it }),
+                                ) {
+                                    Checkbox(checked = form.skipConflicts, onCheckedChange = null)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        "Lewati tanggal yang bentrok (${blocked.size} dari ${form.occurrences.size})",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Amber900,
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -302,38 +334,95 @@ private fun OccurrenceList(items: List<OccurrenceDto>, skipConflicts: Boolean) {
     }
 }
 
+/** Tanggal-tanggal booking mingguan: hijau tersedia, merah (dicoret) bentrok. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun RoomOption(room: AvailabilityRoomDto, selected: Boolean, selectable: Boolean, weeks: Int, onSelect: () -> Unit) {
-    val primary = MaterialTheme.colorScheme.primary
-    val (status, statusColor) = when {
-        room.available -> "Tersedia" to Emerald600
-        !room.fitsCapacity -> "Kapasitas tidak cukup (${room.capacity} orang)" to MaterialTheme.colorScheme.error
-        weeks > 1 && room.conflictDates.isNotEmpty() ->
-            "Bentrok ${room.conflictDates.size} dari $weeks minggu" to if (selectable) Color(0xFFD97706) else MaterialTheme.colorScheme.error
-        room.conflicts.isNotEmpty() -> room.conflicts.first().let {
-            "Terpakai ${it.startTime}–${it.endTime}: ${it.title}"
-        } to MaterialTheme.colorScheme.error
-        else -> "Tidak tersedia" to MaterialTheme.colorScheme.error
-    }
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-        modifier = Modifier
-            .fillMaxWidth()
-            .alpha(if (selectable || selected) 1f else 0.55f)
-            .border(if (selected) 2.dp else 1.dp, if (selected) primary else MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(enabled = selectable, onClick = onSelect),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(12.dp)) {
-            Box(Modifier.size(10.dp).clip(CircleShape).background(roomColor(room.color, primary)))
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text("${room.name}  ·  Lt ${room.floor}", fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
-                Text(status, color = statusColor, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+private fun OccurrenceChips(items: List<OccurrenceDto>) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        items.forEach { o ->
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = if (o.available) Tw.Emerald50 else Tw.Red50,
+                border = BorderStroke(1.dp, if (o.available) Tw.Emerald200 else Tw.Red200),
+                modifier = Modifier.semantics {
+                    contentDescription = "${friendlyDate(o.date)}, ${o.startTime}–${o.endTime}: " + if (o.available) "tersedia" else (o.reason ?: "bentrok")
+                },
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)) {
+                    Icon(
+                        if (o.available) Icons.Outlined.CheckCircle else Icons.Outlined.Cancel,
+                        null,
+                        tint = if (o.available) Tw.Emerald700 else Tw.Red700,
+                        modifier = Modifier.size(12.dp),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        LocalDate.parse(o.date).format(dayMonth),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = if (o.available) Tw.Emerald700 else Tw.Red700,
+                        textDecoration = if (o.available) null else TextDecoration.LineThrough,
+                    )
+                }
             }
-            Text("${room.capacity} org", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
 
+@Composable
+private fun RoomOption(
+    room: AvailabilityRoomDto,
+    selected: Boolean,
+    selectable: Boolean,
+    weeks: Int,
+    onSelect: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val (icon, status, statusColor) = when {
+        room.available -> Triple(Icons.Outlined.CheckCircle, "Tersedia", Tw.Emerald600)
+        weeks > 1 && room.conflictDates.isNotEmpty() && room.fitsCapacity ->
+            Triple(Icons.Outlined.Info, "Bentrok ${room.conflictDates.size} dari $weeks minggu", if (selectable) Tw.Amber600 else Tw.Red600)
+        room.conflicts.isNotEmpty() -> room.conflicts.first().let {
+            Triple(Icons.Outlined.Cancel, "Terpakai ${it.startTime}–${it.endTime}: ${it.title}", Tw.Red600)
+        }
+        else -> Triple(Icons.Outlined.Info, "Kapasitas tidak cukup", Tw.Amber600)
+    }
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = if (selected) Tw.Indigo50 else Color.White,
+        border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) Tw.Indigo500 else Tw.Slate200),
+        modifier = modifier
+            .alpha(if (selectable || selected) 1f else 0.6f)
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(enabled = selectable, role = Role.RadioButton, onClick = onSelect),
+    ) {
+        Row(Modifier.padding(12.dp)) {
+            Box(Modifier.padding(top = 4.dp).size(12.dp).clip(CircleShape).background(roomColor(room.color, Tw.Indigo600)))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        room.name,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = Tw.Slate900,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Pill("Lt ${room.floor}", Tw.Slate100, Tw.Slate600)
+                    Spacer(Modifier.weight(1f))
+                    Icon(Icons.Outlined.Group, null, tint = Tw.Slate500, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("${room.capacity}", fontSize = 12.sp, color = Tw.Slate500)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+                    Icon(icon, null, tint = statusColor, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(status, fontSize = 12.sp, color = statusColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+    }
+}

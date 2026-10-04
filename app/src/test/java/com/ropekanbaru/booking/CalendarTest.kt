@@ -3,6 +3,7 @@ package com.ropekanbaru.booking
 import com.ropekanbaru.booking.data.CalendarRange
 import com.ropekanbaru.booking.data.GridSlots
 import com.ropekanbaru.booking.data.ScheduleMode
+import com.ropekanbaru.booking.data.TodayProgress
 import com.ropekanbaru.booking.data.remote.BookingDto
 import com.ropekanbaru.booking.data.remote.RoomScheduleDto
 import com.ropekanbaru.booking.data.roomStatuses
@@ -106,5 +107,16 @@ class CalendarTest {
         assertEquals(11 * 60 + 30, grid.extend(10 * 60, 14 * 60, free)) // ke bawah, berhenti sebelum 12:00
         assertEquals(7 * 60, grid.extend(9 * 60, 6 * 60, free)) // ke atas, berhenti di jam buka
         assertEquals(10 * 60, grid.extend(10 * 60, 10 * 60, free))
+    }
+
+    @Test
+    fun `semua booking - progres, sisa waktu, dan mulai segera`() {
+        assertEquals(50, TodayProgress.percent(9 * 60, 10 * 60, 9 * 60 + 30))
+        assertEquals(0, TodayProgress.percent(9 * 60, 10 * 60, 8 * 60))
+        assertEquals(100, TodayProgress.percent(9 * 60, 10 * 60, 11 * 60))
+        assertEquals(30, TodayProgress.remaining(10 * 60, 9 * 60 + 30))
+        assertEquals(0, TodayProgress.remaining(10 * 60, 10 * 60 + 5))
+        assertEquals(true, TodayProgress.startsSoon(10 * 60, 9 * 60 + 45))
+        assertEquals(false, TodayProgress.startsSoon(10 * 60, 9 * 60 + 44))
     }
 }

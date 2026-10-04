@@ -84,3 +84,18 @@ class GridSlots(val open: Int, val close: Int, val slot: Int) {
         return current
     }
 }
+
+/** Hitungan untuk pantauan "Semua Booking" hari ini (sama dengan versi web). Menit sejak 00:00. */
+object TodayProgress {
+    /** Persentase berjalan (0–100) sebuah booking yang sedang berlangsung. */
+    fun percent(start: Int, end: Int, now: Int): Int =
+        if (end <= start) 100 else (((now - start) * 100f) / (end - start)).toInt().coerceIn(0, 100)
+
+    /** Sisa waktu dalam menit (tidak negatif). */
+    fun remaining(end: Int, now: Int): Int = (end - now).coerceAtLeast(0)
+
+    /** Menit sampai mulai; dianggap "segera" bila ≤ 15 menit. */
+    fun startsIn(start: Int, now: Int): Int = start - now
+
+    fun startsSoon(start: Int, now: Int): Boolean = start - now <= 15
+}

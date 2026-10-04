@@ -75,7 +75,7 @@ class SettingsRulesTest {
         val body = UserSaveRequest("Budi", "budi", "budi@kantor.test", null, "user", "", "", true)
         val json = ApiJson.encodeToJsonElement(UserSaveRequest.serializer(), body).jsonObject
         assertFalse("password" in json)
-        // Divisi kosong tetap dikirim agar bisa dikosongkan.
+        // Department kosong tetap dikirim agar bisa dikosongkan.
         assertEquals(JsonPrimitive(""), json["department"])
         assertEquals(JsonPrimitive(true), json["is_active"])
     }

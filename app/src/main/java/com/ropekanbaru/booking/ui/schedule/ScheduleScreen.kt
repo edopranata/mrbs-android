@@ -1,40 +1,36 @@
 package com.ropekanbaru.booking.ui.schedule
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SegmentedButton
@@ -42,158 +38,198 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.ropekanbaru.booking.data.CalendarRange
 import com.ropekanbaru.booking.data.ScheduleMode
 import com.ropekanbaru.booking.data.remote.BookingDto
 import com.ropekanbaru.booking.data.remote.RoomScheduleDto
-import com.ropekanbaru.booking.ui.components.Badge
 import com.ropekanbaru.booking.ui.components.DatePickerModal
 import com.ropekanbaru.booking.ui.components.ErrorCard
-import com.ropekanbaru.booking.ui.components.SectionLabel
-import com.ropekanbaru.booking.ui.components.bookingTypeColor
+import com.ropekanbaru.booking.ui.components.bookingBlockColors
 import com.ropekanbaru.booking.ui.components.longDate
 import com.ropekanbaru.booking.ui.components.monthTitle
-import com.ropekanbaru.booking.ui.components.roomColor
 import com.ropekanbaru.booking.ui.components.weekTitle
 import com.ropekanbaru.booking.ui.components.weekdayDate
-import com.ropekanbaru.booking.ui.theme.Emerald600
 import java.time.LocalDate
+import com.ropekanbaru.booking.ui.components.PrevTodayNext
+import com.ropekanbaru.booking.ui.components.Segmented
+import com.ropekanbaru.booking.ui.components.SelectField
+import com.ropekanbaru.booking.ui.components.Tw
+import com.ropekanbaru.booking.ui.icons.CalendarMonth
+import java.time.format.DateTimeFormatter
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.clickable
 
-/** Booking dari jadwal tidak memuat relasi ruangan; pasangkan dengan ruangannya. */
-internal data class RoomBooking(val room: RoomScheduleDto, val booking: BookingDto)
+private val Slate200 = androidx.compose.ui.graphics.Color(0xFFE2E8F0)
 
-internal val WEEKDAYS = listOf("Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab")
-
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Jadwal Ruangan, mengikuti versi web: kalender kecil di kiri (bila cukup lebar), grid waktu ×
+ * ruangan/hari (bergeser ke samping di layar sempit), kalender bulan, dan legenda jenis rapat.
+ */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ScheduleContent(
     vm: ScheduleViewModel,
     currentUserId: Long,
+    slotMinutes: Int,
     onOpenBooking: (Long) -> Unit,
-    onBookRoom: (roomId: Long?, date: LocalDate) -> Unit,
+    onSelectSlot: (roomId: Long?, date: LocalDate, start: String?, end: String?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val state = vm.state
-    var pickDate by rememberSaveable { mutableStateOf(false) }
     val today = LocalDate.now()
     val rooms = state.schedule?.rooms.orEmpty()
+    var pickDate by rememberSaveable { mutableStateOf(false) }
+    var calMonth by rememberSaveable { mutableStateOf(state.date.withDayOfMonth(1)) }
 
-    Column(modifier.fillMaxSize()) {
-        Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 1.dp) {
-            Column(Modifier.padding(top = 8.dp, bottom = 4.dp)) {
-                // Hari / Minggu / Bulan
-                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                    ScheduleMode.entries.forEachIndexed { i, mode ->
-                        SegmentedButton(
-                            selected = state.mode == mode,
-                            onClick = { vm.setMode(mode) },
-                            shape = SegmentedButtonDefaults.itemShape(i, ScheduleMode.entries.size),
-                            label = { Text(mode.label) },
+    // Kalender kecil mengikuti tanggal terpilih bila tanggal itu di luar dua bulan yang tampil.
+    LaunchedEffect(state.date) {
+        val first = state.date.withDayOfMonth(1)
+        if (first != calMonth && first != calMonth.plusMonths(1)) calMonth = first
+    }
+
+    BoxWithConstraints(modifier.fillMaxSize()) {
+        val showMiniCalendars = maxWidth >= 900.dp
+        Row(Modifier.fillMaxSize().padding(if (maxWidth < 600.dp) 16.dp else 20.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            if (showMiniCalendars) {
+                Column(Modifier.width(240.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    listOf(0L, 1L).forEach { offset ->
+                        MiniCalendar(
+                            month = calMonth.plusMonths(offset),
+                            selected = state.date,
+                            today = today,
+                            highlightWeek = state.mode == ScheduleMode.Week,
+                            onSelect = vm::setDate,
+                            onPrev = { calMonth = calMonth.minusMonths(1) },
+                            onNext = { calMonth = calMonth.plusMonths(1) },
                         )
-                    }
-                }
-
-                // Navigasi tanggal
-                val (prevLabel, nextLabel) = when (state.mode) {
-                    ScheduleMode.Day -> "Hari sebelumnya" to "Hari berikutnya"
-                    ScheduleMode.Week -> "Minggu sebelumnya" to "Minggu berikutnya"
-                    ScheduleMode.Month -> "Bulan sebelumnya" to "Bulan berikutnya"
-                }
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
-                    IconButton(onClick = { vm.shift(-1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, prevLabel) }
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).clickable { pickDate = true }.padding(vertical = 4.dp),
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.DateRange, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                when (state.mode) {
-                                    ScheduleMode.Day -> longDate(state.date)
-                                    ScheduleMode.Week -> state.range.let { weekTitle(it.start, it.endInclusive) }
-                                    ScheduleMode.Month -> monthTitle(state.date)
-                                },
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                        }
-                        // Tampilan bulan juga memuat tanggal bulan sebelum/sesudahnya; hitung bulan ini saja.
-                        val count = state.schedule?.let { schedule ->
-                            visibleBookings(schedule.rooms, state.mode, state.roomId).count {
-                                state.mode != ScheduleMode.Month || it.booking.date.startsWith(state.date.toString().take(7))
-                            }
-                        }
-                        Text(
-                            if (count != null) "$count booking · ketuk untuk pilih tanggal" else "Ketuk untuk pilih tanggal",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    IconButton(onClick = { vm.shift(1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, nextLabel) }
-                    TextButton(onClick = { vm.setDate(today) }, enabled = state.date != today) { Text("Hari ini") }
-                }
-
-                // Filter ruangan & sorot booking saya
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
-                ) {
-                    FilterChip(selected = state.highlightMine, onClick = vm::toggleHighlight, label = { Text("Sorot booking saya") })
-                    if (state.mode != ScheduleMode.Day && rooms.isNotEmpty()) {
-                        val selected = selectedRoomId(state.mode, state.roomId, rooms)
-                        if (state.mode == ScheduleMode.Month) {
-                            FilterChip(selected = selected == null, onClick = { vm.setRoom(null) }, label = { Text("Semua ruangan") })
-                        }
-                        rooms.forEach { room ->
-                            FilterChip(selected = selected == room.id, onClick = { vm.setRoom(room.id) }, label = { Text(room.name) })
-                        }
                     }
                 }
             }
-        }
 
-        PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = vm::refresh, modifier = Modifier.fillMaxSize()) {
-            val schedule = state.schedule
-            when {
-                state.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                schedule == null -> Column(Modifier.padding(16.dp)) { ErrorCard(state.error ?: "Gagal memuat jadwal.", onRetry = vm::refresh) }
-                else -> LazyColumn(
-                    contentPadding = PaddingValues(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 96.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.fillMaxSize(),
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // Toolbar (seperti web: ‹ Hari ini ›, judul, tanggal, ruangan, Hari/Minggu/Bulan)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    itemVerticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
-                    val dim = { b: BookingDto -> state.highlightMine && b.userId != currentUserId }
-                    when (state.mode) {
-                        ScheduleMode.Day -> dayView(schedule.rooms, state.date, today, currentUserId, dim, onOpenBooking, onBookRoom)
-                        ScheduleMode.Week -> weekView(schedule.rooms, state, today, currentUserId, dim, onOpenBooking, onBookRoom)
-                        ScheduleMode.Month -> monthView(schedule.rooms, state, today, currentUserId, dim, vm::setDate, onOpenBooking, onBookRoom)
+                    val (prevLabel, nextLabel) = when (state.mode) {
+                        ScheduleMode.Day -> "Hari sebelumnya" to "Hari berikutnya"
+                        ScheduleMode.Week -> "Minggu sebelumnya" to "Minggu berikutnya"
+                        ScheduleMode.Month -> "Bulan sebelumnya" to "Bulan berikutnya"
                     }
-                    item {
-                        Text(
-                            "Jam operasional ${schedule.openTime}–${schedule.closeTime}. Tarik ke bawah untuk memperbarui.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    PrevTodayNext(onPrev = { vm.shift(-1) }, onToday = { vm.setDate(today) }, onNext = { vm.shift(1) }, prevLabel = prevLabel, nextLabel = nextLabel)
+                    Text(
+                        when (state.mode) {
+                            ScheduleMode.Day -> longDate(state.date)
+                            ScheduleMode.Week -> state.range.let { weekTitle(it.start, it.endInclusive) }
+                            ScheduleMode.Month -> monthTitle(state.date)
+                        },
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Tw.Slate900,
+                    )
+                    if (!showMiniCalendars) {
+                        SelectField(
+                            value = state.date.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")),
+                            options = emptyList<Unit>(),
+                            label = { "" },
+                            onSelect = {},
+                            leadingIcon = Icons.Outlined.CalendarMonth,
+                            modifier = Modifier.width(160.dp).clickable { pickDate = true }.semantics { contentDescription = "Pilih tanggal" },
                         )
                     }
+                    if (state.mode != ScheduleMode.Day && rooms.isNotEmpty()) {
+                        RoomPicker(rooms, selectedRoomId(state.mode, state.roomId, rooms), allowAll = state.mode == ScheduleMode.Month, onSelect = vm::setRoom)
+                    }
+                    Segmented(
+                        options = ScheduleMode.entries.map { it.label },
+                        selected = state.mode.ordinal,
+                        onSelect = { vm.setMode(ScheduleMode.entries[it]) },
+                        modifier = Modifier.width(260.dp),
+                    )
+                }
+
+                // Grid / kalender
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, Slate200),
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                ) {
+                    val schedule = state.schedule
+                    Box {
+                        when {
+                            schedule == null && state.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                            schedule == null -> Box(Modifier.padding(16.dp)) { ErrorCard(state.error ?: "Gagal memuat jadwal.", onRetry = vm::refresh) }
+                            state.mode == ScheduleMode.Month -> MonthCalendar(
+                                date = state.date,
+                                today = today,
+                                byDate = visibleBookings(schedule.rooms, state.mode, state.roomId).groupBy { it.booking.date },
+                                currentUserId = currentUserId,
+                                highlightMine = state.highlightMine,
+                                onPickDate = { day ->
+                                    vm.setDate(day)
+                                    vm.setMode(ScheduleMode.Day)
+                                },
+                                onOpenBooking = onOpenBooking,
+                            )
+                            schedule.rooms.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Tidak ada ruangan aktif") }
+                            else -> TimeGrid(
+                                columns = gridColumns(schedule.rooms, state, today),
+                                openTime = schedule.openTime,
+                                closeTime = schedule.closeTime,
+                                slotMinutes = slotMinutes,
+                                currentUserId = currentUserId,
+                                highlightMine = state.highlightMine,
+                                onOpenBooking = onOpenBooking,
+                                onSelect = { col, start, end -> onSelectSlot(col.roomId, col.date, start, end) },
+                            )
+                        }
+                        if (state.refreshing || (state.loading && schedule != null)) {
+                            LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
+                        }
+                    }
+                }
+
+                // Legenda
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    itemVerticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    listOf("internal" to "Internal", "external" to "Eksternal").forEach { (type, label) ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(width = 28.dp, height = 14.dp).background(bookingBlockColors(type).background, RoundedCornerShape(2.dp)))
+                            Spacer(Modifier.width(6.dp))
+                            Text(label, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.toggleable(value = state.highlightMine, role = Role.Checkbox, onValueChange = { vm.toggleHighlight() }),
+                    ) {
+                        Checkbox(checked = state.highlightMine, onCheckedChange = null)
+                        Text("Sorot booking saya", style = MaterialTheme.typography.bodySmall)
+                    }
+                    Text(
+                        if (state.mode == ScheduleMode.Month) "Ketuk tanggal untuk melihat jadwal harian."
+                        else "Ketuk slot kosong, atau tekan lama lalu seret beberapa slot, untuk membuat booking.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }
@@ -203,6 +239,53 @@ fun ScheduleContent(
         DatePickerModal(selected = state.date, onDismiss = { pickDate = false }, onConfirm = vm::setDate)
     }
 }
+
+@Composable
+private fun RoomPicker(rooms: List<RoomScheduleDto>, selected: Long?, allowAll: Boolean, onSelect: (Long?) -> Unit) {
+    val options: List<RoomScheduleDto?> = (if (allowAll) listOf(null) else emptyList<RoomScheduleDto?>()) + rooms
+    val label = { r: RoomScheduleDto? -> r?.let { "${it.name} [Lt ${it.floor}]" } ?: "Semua ruangan" }
+    SelectField(
+        value = label(rooms.firstOrNull { it.id == selected }),
+        options = options,
+        label = label,
+        onSelect = { onSelect(it?.id) },
+        modifier = Modifier.widthIn(min = 180.dp, max = 260.dp),
+    )
+}
+
+/** Kolom grid: tampilan hari = semua ruangan; tampilan minggu = 7 hari untuk satu ruangan. */
+private fun gridColumns(rooms: List<RoomScheduleDto>, state: ScheduleUiState, today: LocalDate): List<GridColumn> =
+    if (state.mode == ScheduleMode.Week) {
+        val room = rooms.firstOrNull { it.id == selectedRoomId(ScheduleMode.Week, state.roomId, rooms) }
+        if (room == null) emptyList() else (0L..6L).map { state.range.start.plusDays(it) }.map { day ->
+            GridColumn(
+                key = day.toString(),
+                label = weekdayDate(day).substringBefore(","),
+                sublabel = day.dayOfMonth.toString() + " " + monthTitle(day).take(3),
+                highlight = day == today,
+                date = day,
+                roomId = room.id,
+                bookings = room.bookings.filter { it.date == day.toString() },
+            )
+        }
+    } else {
+        rooms.map { room ->
+            GridColumn(
+                key = "room-${room.id}",
+                label = room.name,
+                sublabel = "[Lt ${room.floor}] (${room.capacity})",
+                highlight = false,
+                date = state.date,
+                roomId = room.id,
+                bookings = room.bookings.filter { it.date == state.date.toString() },
+            )
+        }
+    }
+
+/** Booking dari jadwal tidak memuat relasi ruangan; pasangkan dengan ruangannya. */
+internal data class RoomBooking(val room: RoomScheduleDto, val booking: BookingDto)
+
+internal val WEEKDAYS = listOf("Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab")
 
 /** Tampilan minggu wajib satu ruangan (default ruangan pertama); bulan boleh semua ruangan. */
 internal fun selectedRoomId(mode: ScheduleMode, roomId: Long?, rooms: List<RoomScheduleDto>): Long? = when (mode) {
@@ -214,271 +297,4 @@ internal fun selectedRoomId(mode: ScheduleMode, roomId: Long?, rooms: List<RoomS
 internal fun visibleBookings(rooms: List<RoomScheduleDto>, mode: ScheduleMode, roomId: Long?): List<RoomBooking> {
     val selected = selectedRoomId(mode, roomId, rooms)
     return rooms.filter { selected == null || it.id == selected }.flatMap { room -> room.bookings.map { RoomBooking(room, it) } }
-}
-
-// ---------------------------------------------------------------- Hari
-
-private fun LazyListScope.dayView(
-    rooms: List<RoomScheduleDto>,
-    date: LocalDate,
-    today: LocalDate,
-    currentUserId: Long,
-    dim: (BookingDto) -> Boolean,
-    onOpenBooking: (Long) -> Unit,
-    onBookRoom: (Long?, LocalDate) -> Unit,
-) {
-    rooms.groupBy { it.floor }.toSortedMap().forEach { (floor, floorRooms) ->
-        item(key = "floor-$floor") { SectionLabel("LANTAI $floor") }
-        items(floorRooms, key = { "room-${it.id}" }) { room ->
-            val bookings = room.bookings.filter { it.date == date.toString() }
-            ScheduleCard(
-                title = room.name,
-                subtitle = "Lt ${room.floor} · ${room.capacity} orang · " +
-                    if (bookings.isEmpty()) "kosong sepanjang hari" else "${bookings.size} booking",
-                dotColor = room.color,
-                canBook = !date.isBefore(today),
-                onBook = { onBookRoom(room.id, date) },
-                hasItems = bookings.isNotEmpty(),
-            ) {
-                bookings.forEach { BookingRow(it, mine = it.userId == currentUserId, dimmed = dim(it), onClick = { onOpenBooking(it.id) }) }
-            }
-        }
-    }
-}
-
-// ---------------------------------------------------------------- Minggu
-
-private fun LazyListScope.weekView(
-    rooms: List<RoomScheduleDto>,
-    state: ScheduleUiState,
-    today: LocalDate,
-    currentUserId: Long,
-    dim: (BookingDto) -> Boolean,
-    onOpenBooking: (Long) -> Unit,
-    onBookRoom: (Long?, LocalDate) -> Unit,
-) {
-    val room = rooms.firstOrNull { it.id == selectedRoomId(ScheduleMode.Week, state.roomId, rooms) } ?: return
-    item(key = "week-room") {
-        Text(
-            "${room.name} · Lt ${room.floor} · ${room.capacity} orang",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-        )
-    }
-    val start = state.range.start
-    items((0L..6L).map { start.plusDays(it) }, key = { "day-$it" }) { day ->
-        val bookings = room.bookings.filter { it.date == day.toString() }
-        ScheduleCard(
-            title = weekdayDate(day),
-            subtitle = if (bookings.isEmpty()) "Kosong" else "${bookings.size} booking",
-            badge = if (day == today) "Hari ini" else null,
-            canBook = !day.isBefore(today),
-            onBook = { onBookRoom(room.id, day) },
-            bookLabel = "Pesan ${room.name} ${weekdayDate(day)}",
-            hasItems = bookings.isNotEmpty(),
-        ) {
-            bookings.forEach { BookingRow(it, mine = it.userId == currentUserId, dimmed = dim(it), onClick = { onOpenBooking(it.id) }) }
-        }
-    }
-}
-
-// ---------------------------------------------------------------- Bulan
-
-private fun LazyListScope.monthView(
-    rooms: List<RoomScheduleDto>,
-    state: ScheduleUiState,
-    today: LocalDate,
-    currentUserId: Long,
-    dim: (BookingDto) -> Boolean,
-    onSelectDay: (LocalDate) -> Unit,
-    onOpenBooking: (Long) -> Unit,
-    onBookRoom: (Long?, LocalDate) -> Unit,
-) {
-    val roomId = selectedRoomId(ScheduleMode.Month, state.roomId, rooms)
-    val byDate = visibleBookings(rooms, ScheduleMode.Month, state.roomId).groupBy { it.booking.date }
-    item(key = "month-grid") {
-        MonthGrid(
-            days = CalendarRange.monthDays(state.date),
-            month = state.date.monthValue,
-            selected = state.date,
-            today = today,
-            byDate = byDate,
-            onSelect = onSelectDay,
-        )
-    }
-    val selected = byDate[state.date.toString()].orEmpty().sortedBy { it.booking.startTime }
-    item(key = "month-day") {
-        ScheduleCard(
-            title = weekdayDate(state.date),
-            subtitle = if (selected.isEmpty()) "Tidak ada booking" else "${selected.size} booking",
-            badge = if (state.date == today) "Hari ini" else null,
-            canBook = !state.date.isBefore(today),
-            onBook = { onBookRoom(roomId, state.date) },
-            hasItems = selected.isNotEmpty(),
-        ) {
-            selected.forEach { (room, b) ->
-                BookingRow(b, mine = b.userId == currentUserId, dimmed = dim(b), roomName = room.name, onClick = { onOpenBooking(b.id) })
-            }
-        }
-    }
-}
-
-@Composable
-private fun MonthGrid(
-    days: List<LocalDate>,
-    month: Int,
-    selected: LocalDate,
-    today: LocalDate,
-    byDate: Map<String, List<RoomBooking>>,
-    onSelect: (LocalDate) -> Unit,
-) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(Modifier.padding(8.dp)) {
-            Row {
-                WEEKDAYS.forEach {
-                    Text(
-                        it,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
-            days.chunked(7).forEach { week ->
-                Row {
-                    week.forEach { day ->
-                        val bookings = byDate[day.toString()].orEmpty()
-                        val isSelected = day == selected
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier
-                                .weight(1f)
-                                .aspectRatio(0.9f)
-                                .padding(2.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface)
-                                .clickable { onSelect(day) }
-                                .alpha(if (day.monthValue == month) 1f else 0.4f)
-                                .semantics { contentDescription = "${weekdayDate(day)}, ${bookings.size} booking" }
-                                .padding(top = 4.dp),
-                        ) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier
-                                    .size(24.dp)
-                                    .then(if (day == today) Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, CircleShape) else Modifier),
-                            ) {
-                                Text(
-                                    "${day.dayOfMonth}",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = if (isSelected || day == today) FontWeight.Bold else FontWeight.Normal,
-                                )
-                            }
-                            Spacer(Modifier.height(2.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                bookings.take(3).forEach { (room, _) ->
-                                    Box(Modifier.size(5.dp).clip(CircleShape).background(roomColor(room.color, MaterialTheme.colorScheme.primary)))
-                                }
-                            }
-                            if (bookings.size > 3) {
-                                Text("+${bookings.size - 3}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ---------------------------------------------------------------- Komponen bersama
-
-@Composable
-private fun ScheduleCard(
-    title: String,
-    subtitle: String,
-    canBook: Boolean,
-    onBook: () -> Unit,
-    dotColor: String? = null,
-    badge: String? = null,
-    bookLabel: String? = null,
-    hasItems: Boolean = true,
-    content: @Composable () -> Unit,
-) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 14.dp, end = 8.dp, top = 8.dp, bottom = 8.dp)) {
-            if (dotColor != null) {
-                Box(Modifier.size(10.dp).clip(CircleShape).background(roomColor(dotColor, MaterialTheme.colorScheme.primary)))
-                Spacer(Modifier.width(10.dp))
-            }
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                    badge?.let { Badge(it, MaterialTheme.colorScheme.primary) }
-                }
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            if (canBook) {
-                OutlinedButton(
-                    onClick = onBook,
-                    contentPadding = PaddingValues(horizontal = 14.dp),
-                    modifier = if (bookLabel != null) Modifier.semantics { contentDescription = bookLabel } else Modifier,
-                ) { Text("Pesan") }
-            }
-        }
-        if (hasItems) {
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            content()
-        }
-    }
-}
-
-@Composable
-private fun BookingRow(booking: BookingDto, mine: Boolean, dimmed: Boolean, onClick: () -> Unit, roomName: String? = null) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .alpha(if (dimmed) 0.35f else 1f)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-    ) {
-        Box(Modifier.width(4.dp).height(34.dp).clip(RoundedCornerShape(2.dp)).background(bookingTypeColor(booking.type)))
-        Spacer(Modifier.width(10.dp))
-        Text(
-            "${booking.startTime}\n${booking.endTime}",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(44.dp),
-        )
-        Column(Modifier.weight(1f)) {
-            Text(
-                (if (booking.isRecurring) "↻ " else "") + booking.title,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                listOfNotNull(roomName, booking.user?.name).joinToString(" · "),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        when {
-            booking.isOngoing -> Badge("Berlangsung", Emerald600)
-            mine -> Badge("Anda", MaterialTheme.colorScheme.primary)
-        }
-    }
 }

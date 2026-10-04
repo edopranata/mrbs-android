@@ -327,7 +327,15 @@ internal fun MonthCalendar(
     modifier: Modifier = Modifier,
 ) {
     val days = CalendarRange.monthDays(date)
-    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+    // Seperti web: kalender minimal 720dp; di layar sempit bisa digeser ke samping.
+    BoxWithConstraints(modifier.fillMaxSize()) {
+    Column(
+        Modifier
+            .horizontalScroll(rememberScrollState())
+            .width(maxOf(maxWidth, 720.dp))
+            .fillMaxHeight()
+            .verticalScroll(rememberScrollState()),
+    ) {
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
             WEEKDAYS.forEach {
                 Text(it, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
@@ -402,6 +410,7 @@ internal fun MonthCalendar(
                 }
             }
         }
+    }
     }
 }
 
