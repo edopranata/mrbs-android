@@ -47,6 +47,11 @@ class AppContainer(context: Context) {
         _bookingChanges.value++
     }
 
+    /** Dipanggil setelah System Admin menyimpan Pengaturan. */
+    fun updateSettings(settings: SettingsDto) {
+        _settings.value = settings
+    }
+
     init {
         authRepository = AuthRepository(api, sessionStore, appScope)
     }

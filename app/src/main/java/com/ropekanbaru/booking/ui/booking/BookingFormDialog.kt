@@ -27,8 +27,6 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -59,13 +57,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.ropekanbaru.booking.data.remote.AvailabilityRoomDto
 import com.ropekanbaru.booking.data.remote.MrbsApi
+import com.ropekanbaru.booking.data.remote.OccurrenceDto
 import com.ropekanbaru.booking.data.remote.SettingsDto
 import com.ropekanbaru.booking.ui.components.DatePickerModal
 import com.ropekanbaru.booking.ui.components.ErrorCard
+import com.ropekanbaru.booking.ui.components.FormDialog
+import com.ropekanbaru.booking.ui.components.OptionDropdown
 import com.ropekanbaru.booking.ui.components.bookingTypeColor
 import com.ropekanbaru.booking.ui.components.friendlyDate
 import com.ropekanbaru.booking.ui.components.roomColor
@@ -81,20 +80,20 @@ fun BookingFormDialog(
     isAdmin: Boolean,
     defaults: BookingDefaults,
     onDismiss: () -> Unit,
-    onCreated: (message: String) -> Unit,
+    onSaved: (message: String) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val form = remember { BookingFormState(api, scope, settings, isAdmin, defaults) }
     var pickDate by remember { mutableStateOf(false) }
     val submit: () -> Unit = {
-        scope.launch { form.submit()?.let(onCreated) }
+        scope.launch { form.submit()?.let(onSaved) }
     }
 
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    FormDialog(onDismiss) {
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Buat Booking") },
+                    title = { Text(if (form.isEditing) "Ubah Booking" else "Buat Booking") },
                     navigationIcon = { IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, "Tutup") } },
                     actions = { TextButton(onClick = submit, enabled = !form.saving) { Text("Simpan") } },
                 )
@@ -165,8 +164,8 @@ fun BookingFormDialog(
                     }
                 }
 
-                // Berulang mingguan
-                if (settings.maxRepeatWeeks > 1) {
+                // Berulang mingguan (hanya saat membuat; mengubah satu booking tidak mengubah seri)
+                if (settings.maxRepeatWeeks > 1 && !form.isEditing) {
                     Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surface) {
                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Row(
@@ -200,6 +199,7 @@ fun BookingFormDialog(
                                     Checkbox(checked = form.skipConflicts, onCheckedChange = null)
                                     Text("Lewati tanggal yang bentrok", style = MaterialTheme.typography.bodyMedium)
                                 }
+                                if (form.occurrences.isNotEmpty()) OccurrenceList(form.occurrences, form.skipConflicts)
                             }
                         }
                     }
@@ -218,7 +218,7 @@ fun BookingFormDialog(
                             selected = form.roomId == room.id,
                             selectable = form.isSelectable(room),
                             weeks = form.effectiveWeeks,
-                            onSelect = { form.roomId = room.id },
+                            onSelect = { form.selectRoom(room.id) },
                         )
                     }
                 }
@@ -239,7 +239,8 @@ fun BookingFormDialog(
                         CircularProgressIndicator(strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp))
                     } else {
                         val room = form.selectedRoom
-                        Text(if (room != null) "Buat Booking · ${room.name}" else "Buat Booking")
+                        val action = if (form.isEditing) "Simpan Perubahan" else "Buat Booking"
+                        Text(if (room != null) "$action · ${room.name}" else action)
                     }
                 }
             }
@@ -265,20 +266,37 @@ private fun TimeDropdown(label: String, value: String?, options: List<String>, o
     }
 }
 
+/** Daftar tanggal booking mingguan beserta status tiap tanggal untuk ruangan terpilih. */
 @Composable
-private fun <T> OptionDropdown(value: String, options: List<T>, label: (T) -> String, onSelect: (T) -> Unit, modifier: Modifier = Modifier) {
-    var open by remember { mutableStateOf(false) }
-    Box(modifier) {
-        OutlinedButton(onClick = { open = true }, enabled = options.isNotEmpty(), modifier = Modifier.fillMaxWidth()) {
-            Text(value, modifier = Modifier.weight(1f, fill = false))
-            Text("  ▾")
-        }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            options.forEach { option ->
-                DropdownMenuItem(text = { Text(label(option)) }, onClick = {
-                    onSelect(option)
-                    open = false
-                })
+private fun OccurrenceList(items: List<OccurrenceDto>, skipConflicts: Boolean) {
+    val conflicts = items.count { !it.available }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            if (conflicts == 0) "Semua ${items.size} tanggal tersedia"
+            else if (skipConflicts) "${items.size - conflicts} dari ${items.size} tanggal akan dibuat ($conflicts dilewati)"
+            else "$conflicts tanggal bentrok — aktifkan \"Lewati tanggal yang bentrok\" atau ganti jam/ruangan",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = if (conflicts == 0) Emerald600 else MaterialTheme.colorScheme.error,
+        )
+        items.forEach { o ->
+            Row(verticalAlignment = Alignment.Top) {
+                Text(
+                    if (o.available) "✓" else "✕",
+                    color = if (o.available) Emerald600 else MaterialTheme.colorScheme.error,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.width(20.dp),
+                )
+                Column {
+                    Text(
+                        "${friendlyDate(o.date)}, ${o.startTime}–${o.endTime}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (o.available) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (!o.available && o.reason != null) {
+                        Text(o.reason, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                    }
+                }
             }
         }
     }

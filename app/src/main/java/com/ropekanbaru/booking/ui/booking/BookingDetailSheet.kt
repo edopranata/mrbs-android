@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -24,6 +25,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -36,14 +38,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import com.ropekanbaru.booking.data.remote.ApiErrors
 import com.ropekanbaru.booking.data.remote.BookingDetailResponse
+import com.ropekanbaru.booking.data.remote.BookingDto
 import com.ropekanbaru.booking.data.remote.CancelRequest
 import com.ropekanbaru.booking.data.remote.MrbsApi
 import com.ropekanbaru.booking.ui.components.Badge
+import com.ropekanbaru.booking.ui.components.ConfirmDialog
 import com.ropekanbaru.booking.ui.components.ErrorCard
 import com.ropekanbaru.booking.ui.components.bookingTypeColor
 import com.ropekanbaru.booking.ui.components.friendlyDate
+import com.ropekanbaru.booking.ui.components.isWideLayout
 import com.ropekanbaru.booking.ui.theme.Emerald600
 import kotlinx.coroutines.launch
 
@@ -53,7 +59,9 @@ fun BookingDetailSheet(
     api: MrbsApi,
     bookingId: Long,
     currentUserId: Long,
+    isAdmin: Boolean,
     onDismiss: () -> Unit,
+    onEdit: (BookingDto) -> Unit,
     onChanged: (message: String) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -64,6 +72,7 @@ fun BookingDetailSheet(
     var scopeFollowing by remember { mutableStateOf(false) }
     var reason by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
 
     LaunchedEffect(bookingId) {
         runCatching { api.booking(bookingId) }
@@ -71,7 +80,7 @@ fun BookingDetailSheet(
             .onFailure { error = ApiErrors.message(it) }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+    val body: @Composable () -> Unit = {
         Column(
             verticalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier
@@ -122,14 +131,27 @@ fun BookingDetailSheet(
                     }
                     error?.let { ErrorCard(it) }
 
+                    if (!cancelMode && (booking.can.update || booking.can.cancel)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (booking.can.cancel) {
+                                OutlinedButton(
+                                    onClick = { cancelMode = true },
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                                    modifier = Modifier.weight(1f),
+                                ) { Text("Batalkan booking") }
+                            }
+                            if (booking.can.update) {
+                                Button(onClick = { onEdit(booking) }, modifier = Modifier.weight(1f)) { Text("Ubah") }
+                            }
+                        }
+                    }
+                    if (!cancelMode && isAdmin) {
+                        TextButton(onClick = { confirmDelete = true }, modifier = Modifier.fillMaxWidth()) {
+                            Text("Hapus permanen", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
                     if (booking.can.cancel) {
-                        if (!cancelMode) {
-                            OutlinedButton(
-                                onClick = { cancelMode = true },
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                                modifier = Modifier.fillMaxWidth(),
-                            ) { Text("Batalkan booking") }
-                        } else {
+                        if (cancelMode) {
                             val following = series?.followingCancellable ?: 1
                             if (following > 1) {
                                 ChoiceRow("Hanya booking ini", !scopeFollowing) { scopeFollowing = false }
@@ -172,6 +194,35 @@ fun BookingDetailSheet(
                 }
             }
         }
+    }
+
+    // HP: lembar dari bawah. Tablet: dialog di tengah seperti versi web.
+    if (isWideLayout()) {
+        Dialog(onDismissRequest = onDismiss) {
+            Surface(shape = RoundedCornerShape(20.dp), modifier = Modifier.widthIn(max = 560.dp).fillMaxWidth()) {
+                Box(Modifier.padding(top = 20.dp)) { body() }
+            }
+        }
+    } else {
+        ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) { body() }
+    }
+
+    val booking = detail?.data
+    if (confirmDelete && booking != null) {
+        ConfirmDialog(
+            title = "Hapus booking",
+            message = "Booking \"${booking.title}\" akan dihapus permanen dari sistem. Lanjutkan?",
+            confirmText = "Hapus",
+            danger = true,
+            onDismiss = { confirmDelete = false },
+            onConfirm = {
+                scope.launch {
+                    runCatching { api.deleteBooking(booking.id) }
+                        .onSuccess { onChanged(it.message ?: "Booking berhasil dihapus.") }
+                        .onFailure { error = ApiErrors.message(it) }
+                }
+            },
+        )
     }
 }
 

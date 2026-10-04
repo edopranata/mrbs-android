@@ -31,8 +31,10 @@ data class UserDto(
     val department: String? = null,
     val phone: String? = null,
     @SerialName("is_active") val isActive: Boolean = true,
+    @SerialName("bookings_count") val bookingsCount: Int? = null,
 ) {
     val isAdmin: Boolean get() = role == "admin" || role == "system_admin"
+    val isSystemAdmin: Boolean get() = role == "system_admin"
 }
 
 @Serializable
@@ -52,7 +54,28 @@ data class SettingsDto(
 data class DashboardDto(
     val stats: DashboardStats = DashboardStats(),
     val ongoing: List<BookingDto> = emptyList(),
+    val today: List<BookingDto> = emptyList(),
     @SerialName("my_upcoming") val myUpcoming: List<BookingDto> = emptyList(),
+    /** Hanya untuk Admin / System Admin. */
+    val admin: DashboardAdmin? = null,
+)
+
+@Serializable
+data class DashboardAdmin(
+    @SerialName("users_total") val usersTotal: Int = 0,
+    @SerialName("users_active") val usersActive: Int = 0,
+    @SerialName("bookings_this_month") val bookingsThisMonth: Int = 0,
+    @SerialName("cancelled_this_month") val cancelledThisMonth: Int = 0,
+    @SerialName("room_usage") val roomUsage: List<RoomUsage> = emptyList(),
+)
+
+@Serializable
+data class RoomUsage(
+    val id: Long,
+    val name: String,
+    val floor: Int,
+    val color: String? = null,
+    @SerialName("bookings_count") val bookingsCount: Int = 0,
 )
 
 @Serializable
@@ -80,6 +103,7 @@ data class BookingDto(
     @SerialName("type_label") val typeLabel: String? = null,
     @SerialName("status_label") val statusLabel: String? = null,
     @SerialName("user_id") val userId: Long? = null,
+    @SerialName("room_id") val roomId: Long? = null,
     @SerialName("series_id") val seriesId: String? = null,
     @SerialName("cancel_reason") val cancelReason: String? = null,
     @SerialName("cancelled_by") val cancelledBy: String? = null,
@@ -126,13 +150,37 @@ data class CreateBookingRequest(
     @SerialName("skip_conflicts") val skipConflicts: Boolean? = null,
 )
 
+/** Ubah booking (tanpa pengulangan; satu booking saja). */
+@Serializable
+data class UpdateBookingRequest(
+    @SerialName("room_id") val roomId: Long,
+    val title: String,
+    val description: String,
+    @SerialName("start_at") val startAt: String,
+    @SerialName("end_at") val endAt: String,
+    val participants: Int,
+    val type: String,
+)
+
+/** Pratinjau satu tanggal booking mingguan. */
+@Serializable
+data class OccurrenceDto(
+    val date: String,
+    @SerialName("start_time") val startTime: String,
+    @SerialName("end_time") val endTime: String,
+    val available: Boolean,
+    val reason: String? = null,
+)
+
 @Serializable
 data class SkippedDate(val date: String, val reason: String? = null)
 
-/** Jadwal harian: ruangan aktif beserta booking pada tanggal tsb. */
+/** Jadwal ruangan aktif beserta booking pada satu tanggal atau rentang `from`–`to`. */
 @Serializable
 data class ScheduleDto(
     val date: String,
+    val from: String? = null,
+    val to: String? = null,
     @SerialName("open_time") val openTime: String = "07:00",
     @SerialName("close_time") val closeTime: String = "20:00",
     val rooms: List<RoomScheduleDto> = emptyList(),
@@ -179,6 +227,83 @@ data class RoomRef(
     val floor: Int,
     val code: String? = null,
     val color: String? = null,
+)
+
+/** Ruangan lengkap (halaman Ruangan & kelola ruangan). */
+@Serializable
+data class RoomDto(
+    val id: Long,
+    val code: String = "",
+    val name: String,
+    val floor: Int,
+    val capacity: Int = 0,
+    val facilities: List<String> = emptyList(),
+    val description: String? = null,
+    val color: String? = null,
+    @SerialName("is_active") val isActive: Boolean = true,
+)
+
+/** Tambah/ubah ruangan. String kosong dikirim agar kolom bisa dikosongkan (Laravel → null). */
+@Serializable
+data class RoomSaveRequest(
+    val code: String,
+    val name: String,
+    val floor: Int,
+    val capacity: Int,
+    val facilities: List<String>,
+    val description: String,
+    val color: String,
+    @SerialName("is_active") val isActive: Boolean,
+)
+
+/** Respons daftar Laravel yang dipaginasi. */
+@Serializable
+data class PageResponse<T>(val data: List<T>, val meta: PageMeta = PageMeta())
+
+@Serializable
+data class PageMeta(
+    @SerialName("current_page") val currentPage: Int = 1,
+    @SerialName("last_page") val lastPage: Int = 1,
+    val total: Int = 0,
+)
+
+/** Pantauan admin: booking hari ini yang sedang berlangsung & akan datang. */
+@Serializable
+data class TodayBookingsDto(
+    val date: String,
+    val ongoing: List<BookingDto> = emptyList(),
+    val upcoming: List<BookingDto> = emptyList(),
+)
+
+@Serializable
+data class ProfileRequest(val name: String, val department: String, val phone: String)
+
+@Serializable
+data class PasswordRequest(
+    @SerialName("current_password") val currentPassword: String,
+    val password: String,
+    @SerialName("password_confirmation") val passwordConfirmation: String,
+)
+
+/** Tambah/ubah user. `password` null (tidak dikirim) = tidak diubah. */
+@Serializable
+data class UserSaveRequest(
+    val name: String,
+    val username: String,
+    val email: String,
+    val password: String?,
+    val role: String,
+    val department: String,
+    val phone: String,
+    @SerialName("is_active") val isActive: Boolean,
+)
+
+/** Halaman Pengaturan: nilai berlaku, nilai default (.env), dan kunci yang diubah. */
+@Serializable
+data class ManageSettingsDto(
+    val values: SettingsDto,
+    val defaults: SettingsDto,
+    val overridden: List<String> = emptyList(),
 )
 
 /** Bentuk error Laravel: `{ "message": "...", "errors": { "field": ["pesan"] } }`. */

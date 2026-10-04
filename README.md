@@ -46,6 +46,29 @@ Butuh `JAVA_HOME` ke JDK Android Studio dan `ANDROID_HOME` ke Android SDK:
 ./gradlew testDebugUnitTest    # unit test
 ```
 
+## Fitur
+
+Sama dengan versi web, sesuai level akun:
+
+- **Semua user:** Dashboard (status ruangan saat ini, booking saya berikutnya), Jadwal Ruangan
+  (Hari / Minggu / Bulan, "Sorot booking saya"), buat booking (termasuk berulang mingguan dengan
+  pratinjau tiap tanggal), ubah & batalkan booking, Booking Saya (mendatang / riwayat / dibatalkan),
+  Ruangan, Profil & ubah password.
+- **Admin:** Semua Booking (hari ini), hapus booking permanen, kelola ruangan, Manajemen User,
+  statistik pemakaian ruangan bulan ini.
+- **System Admin:** Pengaturan (nama aplikasi, jam operasional, aturan booking).
+
+### Tampilan HP & tablet
+
+Tata letak menyesuaikan lebar layar (`ui/components/Adaptive.kt`):
+
+| Lebar | Tampilan |
+|---|---|
+| < 600dp (HP) | Navigasi bawah (Beranda, Jadwal, Booking Saya, Lainnya), form layar penuh, detail dari bawah |
+| ≥ 600dp (tablet, HP lipat dibuka) | Seperti versi web: sidebar menu, grid jadwal waktu × ruangan (ketuk slot, atau tekan lama lalu seret untuk memilih jam), kalender bulan, daftar kartu multi-kolom, form & detail sebagai dialog di tengah |
+
+Kalender kecil di samping jadwal muncul bila area konten ≥ 900dp (mis. tablet landscape).
+
 ## Struktur kode
 
 ```
@@ -53,8 +76,10 @@ app/src/main/java/com/ropekanbaru/booking/
   AppContainer.kt          # dependensi aplikasi (API, sesi, pengaturan)
   data/remote/             # Retrofit API, model JSON, pesan error
   data/session/            # token login terenkripsi (Android Keystore + DataStore)
-  data/AuthRepository.kt   # login, logout, pemulihan sesi
-  ui/                      # layar Jetpack Compose (login, beranda) & tema
+  data/                    # login/sesi, aturan jam booking, rentang kalender & grid jadwal, aturan Pengaturan
+  ui/MainScreen.kt         # kerangka: navigasi bawah (HP) atau sidebar (tablet)
+  ui/home, schedule, mybookings, booking, rooms, profile, admin, more   # layar per menu
+  ui/components/           # komponen bersama (kartu, dialog, loader, tata letak adaptif)
 ```
 
 ## Keamanan

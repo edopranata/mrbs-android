@@ -56,6 +56,12 @@ class AuthRepository(
         response.user
     }
 
+    /** Data akun berubah (mis. profil disimpan): perbarui sesi tersimpan & tampilan. */
+    suspend fun updateUser(user: UserDto) {
+        store.updateUser(user)
+        if (_state.value is SessionState.LoggedIn) _state.value = SessionState.LoggedIn(user)
+    }
+
     suspend fun logout() {
         runCatching { api.logout() } // tetap keluar walau server tidak terjangkau
         signOutLocally()
