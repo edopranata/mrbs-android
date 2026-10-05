@@ -20,6 +20,12 @@ val localProperties = Properties().apply {
     rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
 }
 val productionApiUrl = "https://booking.ropekanbaru.com/api/"
+
+// Kunci rilis dibaca dari keystore.properties (tidak di-commit; lihat README bagian "Build rilis").
+// Tanpa file itu, build release tetap jalan tetapi APK-nya tidak ditandatangani.
+val keystoreProperties = Properties().apply {
+    rootProject.file("keystore.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+}
 val developmentApiUrl = localProperties.getProperty("mrbs.apiUrl") ?: "http://127.0.0.1:8000/api/"
 
 android {
@@ -38,12 +44,24 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (!keystoreProperties.isEmpty) {
+            create("release") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         debug {
             buildConfigField("String", "API_BASE_URL", "\"$developmentApiUrl\"")
         }
         release {
             buildConfigField("String", "API_BASE_URL", "\"$productionApiUrl\"")
+            signingConfig = signingConfigs.findByName("release")
             optimization {
                 enable = true
                 packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")

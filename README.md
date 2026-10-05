@@ -55,6 +55,33 @@ Butuh `JAVA_HOME` ke JDK Android Studio dan `ANDROID_HOME` ke Android SDK:
 ./gradlew testDebugUnitTest    # unit test
 ```
 
+## Build rilis (server produksi)
+
+Build release memakai `https://booking.ropekanbaru.com/api/` dan ditandatangani kunci rilis.
+
+1. Siapkan `android/keystore.properties` (tidak di-commit) yang menunjuk ke keystore rilis:
+
+   ```properties
+   storeFile=/Users/<nama>/Keystores/mrbs-release.jks
+   storePassword=...
+   keyAlias=mrbs
+   keyPassword=...
+   ```
+
+2. Build:
+
+   ```bash
+   ./gradlew assembleRelease
+   # hasil: app/build/outputs/apk/release/app-release.apk
+   ```
+
+3. Sebelum membagikan versi baru, naikkan `versionCode` (dan `versionName`) di `app/build.gradle.kts`;
+   Android hanya mau memperbarui aplikasi bila `versionCode` lebih besar dan kuncinya sama.
+
+> **Cadangkan keystore dan password-nya** (mis. di password manager). Bila hilang, versi baru tidak
+> bisa dipasang sebagai pembaruan; pengguna harus menghapus aplikasi lama lebih dulu. Tanpa
+> `keystore.properties`, build release tetap jalan tetapi APK-nya tidak ditandatangani.
+
 ## Fitur
 
 Sama dengan versi web, sesuai level akun:
