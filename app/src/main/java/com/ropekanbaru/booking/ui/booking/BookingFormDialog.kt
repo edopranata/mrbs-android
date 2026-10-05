@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -22,6 +25,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Info
+import com.ropekanbaru.booking.ui.icons.Tv
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -44,6 +48,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -216,7 +221,7 @@ fun BookingFormDialog(
             form.rooms.groupBy { it.floor }.toSortedMap().forEach { (floor, rooms) ->
                 Text("LANTAI $floor", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Tw.Slate500)
                 rooms.chunked(if (wide) 2 else 1).forEach { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.height(IntrinsicSize.Min)) {
                         row.forEach { room ->
                             RoomOption(
                                 room = room,
@@ -224,7 +229,7 @@ fun BookingFormDialog(
                                 selectable = form.isSelectable(room),
                                 weeks = form.effectiveWeeks,
                                 onSelect = { form.selectRoom(room.id) },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.weight(1f).fillMaxHeight(),
                             )
                         }
                         if (wide && row.size == 1) Spacer(Modifier.weight(1f))
@@ -402,18 +407,21 @@ private fun RoomOption(
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        room.name,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = Tw.Slate900,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Pill("Lt ${room.floor}", Tw.Slate100, Tw.Slate600)
-                    Spacer(Modifier.weight(1f))
+                    // Nama + lantai memakai seluruh sisa ruang; nama baru dipotong bila memang tidak muat.
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                        Text(
+                            room.name,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = Tw.Slate900,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Pill("Lt ${room.floor}", Tw.Slate100, Tw.Slate600)
+                    }
+                    Spacer(Modifier.width(8.dp))
                     Icon(Icons.Outlined.Group, null, tint = Tw.Slate500, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(4.dp))
                     Text("${room.capacity}", fontSize = 12.sp, color = Tw.Slate500)
@@ -422,6 +430,22 @@ private fun RoomOption(
                     Icon(icon, null, tint = statusColor, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(4.dp))
                     Text(status, fontSize = 12.sp, color = statusColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                // Fasilitas: selalu tepat 2 baris agar semua kartu ruangan sama tinggi.
+                Row(modifier = Modifier.padding(top = 6.dp)) {
+                    Icon(Icons.Outlined.Tv, null, tint = Tw.Slate400, modifier = Modifier.padding(top = 1.dp).size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        if (room.facilities.isEmpty()) "Fasilitas belum diisi" else room.facilities.joinToString(" · "),
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp,
+                        color = if (room.facilities.isEmpty()) Tw.Slate400 else Tw.Slate500,
+                        fontStyle = if (room.facilities.isEmpty()) FontStyle.Italic else null,
+                        minLines = 2,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.semantics { contentDescription = "Fasilitas: " + room.facilities.joinToString(", ").ifEmpty { "belum diisi" } },
+                    )
                 }
             }
         }

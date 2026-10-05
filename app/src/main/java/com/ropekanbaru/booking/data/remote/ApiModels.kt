@@ -205,6 +205,7 @@ data class AvailabilityRoomDto(
     val floor: Int,
     val capacity: Int = 0,
     val color: String? = null,
+    val facilities: List<String> = emptyList(),
     val available: Boolean = false,
     @SerialName("fits_capacity") val fitsCapacity: Boolean = true,
     @SerialName("conflict_dates") val conflictDates: List<String> = emptyList(),

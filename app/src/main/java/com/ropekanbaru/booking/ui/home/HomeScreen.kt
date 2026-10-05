@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -116,8 +117,9 @@ fun HomeContent(
                         )
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             statItems.chunked(if (roomy) 4 else 2).forEach { row ->
-                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    row.forEach { StatCard(it, Modifier.weight(1f)) }
+                                // Grid seragam: lebar kolom sama, kartu sebaris sama tinggi.
+                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.height(IntrinsicSize.Min)) {
+                                    row.forEach { StatCard(it, Modifier.weight(1f).fillMaxHeight()) }
                                 }
                             }
                         }
@@ -130,9 +132,9 @@ fun HomeContent(
                                         Text("LANTAI $floor", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Tw.Slate500, modifier = Modifier.padding(top = 4.dp))
                                         // Dua kolom bila cukup lebar (web: sm:grid-cols-2), satu kolom di HP.
                                         rooms.chunked(if (wide) 2 else 1).forEach { pair ->
-                                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.height(IntrinsicSize.Min)) {
                                                 pair.forEach { status ->
-                                                    Box(Modifier.weight(1f)) { RoomStatusCard(status, onOpenBooking, onBook = { onBookRoom(status.room.id) }) }
+                                                    Box(Modifier.weight(1f).fillMaxHeight()) { RoomStatusCard(status, onOpenBooking, onBook = { onBookRoom(status.room.id) }) }
                                                 }
                                                 if (wide && pair.size == 1) Spacer(Modifier.weight(1f))
                                             }
@@ -175,12 +177,13 @@ private data class Stat(val icon: ImageVector, val background: Color, val tint: 
 @Composable
 private fun StatCard(stat: Stat, modifier: Modifier = Modifier) {
     WebCard(modifier) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(14.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxSize().padding(14.dp)) {
             IconBox(stat.icon, stat.background, stat.tint)
             Spacer(Modifier.width(12.dp))
             Column {
                 Text(stat.value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, color = Tw.Slate900)
-                Text(stat.label, fontSize = 12.sp, lineHeight = 15.sp, color = Tw.Slate500)
+                // Label selalu 2 baris agar semua kartu statistik sama tinggi.
+                Text(stat.label, fontSize = 12.sp, lineHeight = 15.sp, color = Tw.Slate500, minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -194,7 +197,7 @@ private fun RoomStatusCard(status: RoomStatus, onOpenBooking: (Long) -> Unit, on
         shape = RoundedCornerShape(8.dp),
         color = if (current != null) Tw.Red50 else Tw.Emerald50,
         border = BorderStroke(1.dp, if (current != null) Tw.Red200 else Tw.Emerald200),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxSize(),
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -203,34 +206,31 @@ private fun RoomStatusCard(status: RoomStatus, onOpenBooking: (Long) -> Unit, on
                 Text(status.room.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = Tw.Slate900, modifier = Modifier.weight(1f))
                 if (current != null) Pill("Dipakai", Tw.Red100, Tw.Red700, dot = Tw.Red500) else Pill("Kosong", Tw.Emerald100, Tw.Emerald700)
             }
+            // Struktur tetap (judul + 2 baris) agar kartu "Dipakai" dan "Kosong" sama tinggi.
+            val next = status.next?.let { "Berikutnya ${it.startTime}: ${it.title}" } ?: "Tidak ada booking lagi hari ini"
             if (current != null) {
-                Text(
-                    "${current.startTime}–${current.endTime} · ${current.title}",
-                    fontSize = 12.sp,
-                    color = Tw.Slate600,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth().clickable { onOpenBooking(current.id) },
-                )
-            }
-            Text(
-                status.next?.let { "Berikutnya ${it.startTime}: ${it.title}" } ?: "Tidak ada booking lagi hari ini",
-                fontSize = 12.sp,
-                color = Tw.Slate500,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (current == null) {
-                Text(
-                    "+ Pesan ruangan ini",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Tw.Indigo600,
-                    modifier = Modifier.padding(top = 4.dp).clip(RoundedCornerShape(4.dp)).clickable(onClick = onBook),
-                )
+                StatusLine("${current.startTime}–${current.endTime} · ${current.title}", Tw.Slate600, onClick = { onOpenBooking(current.id) })
+                StatusLine(next, Tw.Slate500)
+            } else {
+                StatusLine(next, Tw.Slate500)
+                StatusLine("+ Pesan ruangan ini", Tw.Indigo600, bold = true, onClick = onBook)
             }
         }
     }
+}
+
+@Composable
+private fun StatusLine(text: String, color: Color, bold: Boolean = false, onClick: (() -> Unit)? = null) {
+    Text(
+        text,
+        fontSize = 12.sp,
+        lineHeight = 18.sp,
+        fontWeight = if (bold) FontWeight.Medium else FontWeight.Normal,
+        color = color,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.fillMaxWidth().then(if (onClick != null) Modifier.clip(RoundedCornerShape(4.dp)).clickable(onClick = onClick) else Modifier),
+    )
 }
 
 @Composable
