@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
@@ -118,9 +119,9 @@ fun BookingDetailSheet(
         title = "Detail Booking",
         onDismiss = onDismiss,
         titleExtra = { booking?.let { StatusBadge(it) } },
-        footer = if (booking != null && !cancelMode && (booking.can.update || booking.can.cancel || isAdmin)) {
+        footer = if (booking != null && !cancelMode && (booking.can.update || booking.can.cancel || canDelete(booking, isAdmin))) {
             {
-                if (isAdmin) GhostButton("Hapus", onClick = { confirmDelete = true }, icon = Icons.Outlined.DeleteOutline, danger = true)
+                if (canDelete(booking, isAdmin)) GhostButton("Hapus", onClick = { confirmDelete = true }, icon = Icons.Outlined.DeleteOutline, danger = true)
                 Spacer(Modifier.weight(1f))
                 if (booking.can.cancel) SecondaryButton("Batalkan", onClick = { cancelMode = true }, icon = Icons.Outlined.Cancel, danger = true)
                 if (booking.can.update) PrimaryButton("Ubah", onClick = { onEdit(booking) }, icon = Icons.Outlined.Edit)
@@ -139,6 +140,7 @@ fun BookingDetailSheet(
                         if (booking.isRecurring) {
                             Pill("↻ Mingguan" + (series?.let { " · minggu ke-${it.position} dari ${it.total}" } ?: ""), Tw.Indigo50, Tw.Indigo700)
                         }
+                        if (booking.isLegacy) Pill("Dari MRBS lama", Tw.Amber50, Color(0xFFB45309))
                     }
                 }
 
@@ -175,6 +177,16 @@ fun BookingDetailSheet(
                         Text(it, style = MaterialTheme.typography.bodyMedium, color = Tw.Slate600, modifier = Modifier.padding(12.dp))
                     }
                 }
+                if (booking.legacyLocked) {
+                    Surface(shape = RoundedCornerShape(8.dp), color = Tw.Amber50, border = BorderStroke(1.dp, Color(0xFFFDE68A)), modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            "Booking ini berasal dari MRBS lama. Selama masa transisi, ubah atau batalkan di MRBS lama; perubahannya akan tersinkron otomatis.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFF92400E),
+                            modifier = Modifier.padding(12.dp),
+                        )
+                    }
+                }
                 if (booking.isCancelled) {
                     Surface(shape = RoundedCornerShape(8.dp), color = Tw.Red50, border = BorderStroke(1.dp, Tw.Red200), modifier = Modifier.fillMaxWidth()) {
                         Text(
@@ -188,7 +200,7 @@ fun BookingDetailSheet(
                 error?.let { ErrorCard(it) }
 
                 if (cancelMode && booking.can.cancel) {
-                    Surface(shape = RoundedCornerShape(8.dp), color = androidx.compose.ui.graphics.Color.White, border = BorderStroke(1.dp, Tw.Slate200), modifier = Modifier.fillMaxWidth()) {
+                    Surface(shape = RoundedCornerShape(8.dp), color = Color.White, border = BorderStroke(1.dp, Tw.Slate200), modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (following > 1) {
                                 FieldLabel("Batalkan")
@@ -255,3 +267,6 @@ private fun ChoiceRow(label: String, selected: Boolean, onClick: () -> Unit) {
         Text(label, style = MaterialTheme.typography.bodyMedium, color = Tw.Slate700)
     }
 }
+
+/** Hapus permanen: mengikuti izin dari server (can.delete); server lama tanpa field itu → admin. */
+private fun canDelete(booking: BookingDto, isAdmin: Boolean): Boolean = booking.can.delete ?: isAdmin

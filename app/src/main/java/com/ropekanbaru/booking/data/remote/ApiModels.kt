@@ -97,6 +97,9 @@ data class BookingDto(
     val type: String = "internal",
     @SerialName("is_ongoing") val isOngoing: Boolean = false,
     @SerialName("is_recurring") val isRecurring: Boolean = false,
+    /** Berasal dari MRBS lama; `legacyLocked` = hanya-baca selama sinkronisasi masa transisi. */
+    @SerialName("is_legacy") val isLegacy: Boolean = false,
+    @SerialName("legacy_locked") val legacyLocked: Boolean = false,
     @SerialName("has_ended") val hasEnded: Boolean = false,
     val description: String? = null,
     val participants: Int = 1,
@@ -118,7 +121,7 @@ data class BookingDto(
 data class UserRef(val id: Long, val name: String, val department: String? = null)
 
 @Serializable
-data class BookingPermissions(val update: Boolean = false, val cancel: Boolean = false)
+data class BookingPermissions(val update: Boolean = false, val cancel: Boolean = false, val delete: Boolean? = null)
 
 @Serializable
 data class BookingDetailResponse(val data: BookingDto, val series: SeriesInfo? = null)
