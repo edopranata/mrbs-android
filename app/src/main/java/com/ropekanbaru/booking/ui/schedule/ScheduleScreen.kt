@@ -83,7 +83,8 @@ fun ScheduleContent(
     currentUserId: Long,
     slotMinutes: Int,
     onOpenBooking: (Long) -> Unit,
-    onSelectSlot: (roomId: Long?, date: LocalDate, start: String?, end: String?) -> Unit,
+    /** null = akun View Only: slot kosong tidak bisa dipilih untuk booking. */
+    onSelectSlot: ((roomId: Long?, date: LocalDate, start: String?, end: String?) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val state = vm.state
@@ -195,7 +196,7 @@ fun ScheduleContent(
                                 currentUserId = currentUserId,
                                 highlightMine = state.highlightMine,
                                 onOpenBooking = onOpenBooking,
-                                onSelect = { col, start, end -> onSelectSlot(col.roomId, col.date, start, end) },
+                                onSelect = onSelectSlot?.let { pick -> { col, start, end -> pick(col.roomId, col.date, start, end) } },
                             )
                         }
                         if (state.refreshing || (state.loading && schedule != null)) {

@@ -79,7 +79,8 @@ fun HomeContent(
     onOpenBooking: (Long) -> Unit,
     onOpenSchedule: () -> Unit,
     onOpenMyBookings: () -> Unit,
-    onBookRoom: (roomId: Long) -> Unit,
+    /** null = akun View Only: tanpa tombol pesan & panel Booking Saya. */
+    onBookRoom: ((roomId: Long) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val state = vm.state
@@ -111,7 +112,11 @@ fun HomeContent(
                         val statItems = listOf(
                             Stat(Icons.Outlined.DoorFront, Tw.Emerald50, Tw.Emerald600, "${stats.roomsInUse} / ${stats.roomsTotal}", "Ruangan dipakai sekarang"),
                             Stat(Icons.Outlined.EventAvailable, Tw.Indigo50, Tw.Indigo600, "${stats.bookingsToday}", "Booking hari ini"),
-                            Stat(Icons.Outlined.Schedule, Tw.Amber50, Tw.Amber600, "${stats.myUpcoming}", "Booking saya (mendatang)"),
+                            if (user.isViewer) {
+                                Stat(Icons.Outlined.Schedule, Tw.Amber50, Tw.Amber600, "${dashboard.ongoing.size}", "Booking sedang berlangsung")
+                            } else {
+                                Stat(Icons.Outlined.Schedule, Tw.Amber50, Tw.Amber600, "${stats.myUpcoming}", "Booking saya (mendatang)")
+                            },
                             dashboard.admin?.let { Stat(Icons.Outlined.Group, Tw.Sky50, Tw.Sky600, "${it.usersActive}", "User aktif") }
                                 ?: Stat(Icons.Outlined.Apartment, Tw.Sky50, Tw.Sky600, "${stats.roomsTotal}", "Total ruang rapat"),
                         )
@@ -134,7 +139,7 @@ fun HomeContent(
                                         rooms.chunked(if (wide) 2 else 1).forEach { pair ->
                                             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.height(IntrinsicSize.Min)) {
                                                 pair.forEach { status ->
-                                                    Box(Modifier.weight(1f).fillMaxHeight()) { RoomStatusCard(status, onOpenBooking, onBook = { onBookRoom(status.room.id) }) }
+                                                    Box(Modifier.weight(1f).fillMaxHeight()) { RoomStatusCard(status, onOpenBooking, onBook = onBookRoom?.let { book -> { book(status.room.id) } }) }
                                                 }
                                                 if (wide && pair.size == 1) Spacer(Modifier.weight(1f))
                                             }
@@ -155,7 +160,9 @@ fun HomeContent(
                                 }
                             }
                         }
-                        if (roomy) {
+                        if (onBookRoom == null) {
+                            roomPanel(Modifier.fillMaxWidth())
+                        } else if (roomy) {
                             Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                                 roomPanel(Modifier.weight(2f))
                                 minePanel(Modifier.weight(1f))
@@ -191,7 +198,7 @@ private fun StatCard(stat: Stat, modifier: Modifier = Modifier) {
 
 /** Kartu status ruangan: hijau bila kosong, merah bila sedang dipakai (sama dengan web). */
 @Composable
-private fun RoomStatusCard(status: RoomStatus, onOpenBooking: (Long) -> Unit, onBook: () -> Unit) {
+private fun RoomStatusCard(status: RoomStatus, onOpenBooking: (Long) -> Unit, onBook: (() -> Unit)?) {
     val current = status.current
     Surface(
         shape = RoundedCornerShape(8.dp),
@@ -213,7 +220,8 @@ private fun RoomStatusCard(status: RoomStatus, onOpenBooking: (Long) -> Unit, on
                 StatusLine(next, Tw.Slate500)
             } else {
                 StatusLine(next, Tw.Slate500)
-                StatusLine("+ Pesan ruangan ini", Tw.Indigo600, bold = true, onClick = onBook)
+                // View Only: baris kosong agar tinggi kartu tetap sama.
+                if (onBook != null) StatusLine("+ Pesan ruangan ini", Tw.Indigo600, bold = true, onClick = onBook) else StatusLine("", Tw.Slate500)
             }
         }
     }

@@ -106,7 +106,7 @@ fun MainScreen(user: UserDto, settings: SettingsDto, container: AppContainer) {
 
     // Level akun berubah (mis. diturunkan admin lain): tutup halaman yang tidak boleh diakses lagi.
     LaunchedEffect(user.role) {
-        if ((destination.admin && !user.isAdmin) || (destination.systemAdmin && !user.isSystemAdmin)) navigate(Destination.Dashboard)
+        if (!destination.allowedFor(user)) navigate(Destination.Dashboard)
     }
 
     BackHandler(enabled = drawer.isOpen) { scope.launch { drawer.close() } }
@@ -145,7 +145,9 @@ fun MainScreen(user: UserDto, settings: SettingsDto, container: AppContainer) {
                             if (!wide) IconButton(onClick = { scope.launch { drawer.open() } }) { Icon(Icons.Default.Menu, "Buka menu") }
                         },
                         actions = {
-                            if (wide) {
+                            if (user.isViewer) {
+                                // View Only: tidak bisa membuat booking.
+                            } else if (wide) {
                                 PrimaryButton("Buat Booking", onClick = newBooking, icon = Icons.Outlined.EditCalendar, modifier = Modifier.padding(end = 12.dp))
                             } else {
                                 FilledIconButton(
@@ -174,7 +176,7 @@ fun MainScreen(user: UserDto, settings: SettingsDto, container: AppContainer) {
                     onOpenBooking = { detailId = it },
                     onOpenSchedule = { navigate(Destination.Schedule) },
                     onOpenMyBookings = { navigate(Destination.MyBookings) },
-                    onBookRoom = { roomId -> form = BookingDefaults(roomId = roomId) },
+                    onBookRoom = if (user.isViewer) null else { roomId -> form = BookingDefaults(roomId = roomId) },
                     modifier = modifier,
                 )
                 Destination.Schedule -> ScheduleContent(
@@ -182,7 +184,7 @@ fun MainScreen(user: UserDto, settings: SettingsDto, container: AppContainer) {
                     currentUserId = user.id,
                     slotMinutes = settings.slotMinutes,
                     onOpenBooking = { detailId = it },
-                    onSelectSlot = { roomId, date, start, end -> form = BookingDefaults(roomId = roomId, date = date, start = start, end = end) },
+                    onSelectSlot = if (user.isViewer) null else { roomId, date, start, end -> form = BookingDefaults(roomId = roomId, date = date, start = start, end = end) },
                     modifier = modifier,
                 )
                 Destination.MyBookings -> MyBookingsContent(

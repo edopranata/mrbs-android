@@ -70,7 +70,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** Level user beserta labelnya, urut dari tertinggi. */
-private val ROLES = listOf("system_admin" to "System Admin", "admin" to "Admin", "user" to "User")
+private val ROLES = listOf("system_admin" to "System Admin", "admin" to "Admin", "user" to "User", "viewer" to "View Only")
 private fun roleLabel(role: String) = ROLES.firstOrNull { it.first == role }?.second ?: role
 
 /** Warna badge level, sama dengan web (rose / purple / slate). */
@@ -78,6 +78,7 @@ private fun roleLabel(role: String) = ROLES.firstOrNull { it.first == role }?.se
 private fun RoleBadge(role: String, label: String) = when (role) {
     "system_admin" -> Pill(label, Color(0xFFFFF1F2), Color(0xFFBE123C))
     "admin" -> Pill(label, Color(0xFFFAF5FF), Color(0xFF7E22CE))
+    "viewer" -> Pill(label, Color(0xFFF0FDFA), Color(0xFF0F766E))
     else -> Pill(label, Tw.Slate100, Tw.Slate600)
 }
 
@@ -269,7 +270,7 @@ private fun UserFormDialog(
     var error by remember { mutableStateOf<String?>(null) }
 
     // Admin biasa tidak boleh memberi level System Admin (kecuali akun itu memang System Admin).
-    val roleOptions = listOf("user", "admin") + if (currentUser.isSystemAdmin || user?.role == "system_admin") listOf("system_admin") else emptyList()
+    val roleOptions = listOf("user", "viewer", "admin") + if (currentUser.isSystemAdmin || user?.role == "system_admin") listOf("system_admin") else emptyList()
 
     val save: () -> Unit = save@{
         error = when {

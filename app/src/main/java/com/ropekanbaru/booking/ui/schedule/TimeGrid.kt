@@ -111,7 +111,8 @@ fun TimeGrid(
     currentUserId: Long,
     highlightMine: Boolean,
     onOpenBooking: (Long) -> Unit,
-    onSelect: (column: GridColumn, start: String, end: String?) -> Unit,
+    /** null = hanya melihat (akun View Only). */
+    onSelect: ((column: GridColumn, start: String, end: String?) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val grid = remember(openTime, closeTime, slotMinutes) {
@@ -178,7 +179,7 @@ fun TimeGrid(
                 Box(Modifier.width(1.dp).height(bodyHeight).background(Slate200))
                 Row(Modifier.weight(1f).horizontalScroll(horizontal)) {
                     columns.forEach { col ->
-                        val free = { m: Int -> grid.isFree(col.date, col.bookings, m, now) }
+                        val free = { m: Int -> select != null && grid.isFree(col.date, col.bookings, m, now) }
                         Box(
                             Modifier
                                 .width(colWidth)
@@ -187,7 +188,7 @@ fun TimeGrid(
                                 .pointerInput(col, grid, now) {
                                     detectTapGestures { offset ->
                                         val m = grid.slotAt(offset.y / rowPx)
-                                        if (free(m)) select(col, TimeSlots.format(m), null)
+                                        if (free(m)) select?.invoke(col, TimeSlots.format(m), null)
                                     }
                                 }
                                 .pointerInput(col, grid, now) {
@@ -203,7 +204,7 @@ fun TimeGrid(
                                         },
                                         onDragEnd = {
                                             selection?.let { sel ->
-                                                select(
+                                                select?.invoke(
                                                     col,
                                                     TimeSlots.format(sel.from),
                                                     if (sel.to > sel.from) TimeSlots.format(sel.to + grid.slot) else null,

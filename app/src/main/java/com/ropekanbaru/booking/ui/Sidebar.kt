@@ -62,7 +62,19 @@ enum class Destination(val title: String, val icon: ImageVector, val admin: Bool
     Users("Manajemen User", Icons.Outlined.Group, admin = true),
     Settings("Pengaturan", Icons.Outlined.Settings, admin = true, systemAdmin = true),
     Profile("Profil", Icons.Outlined.AccountCircle),
+    ;
+
+    /** Boleh dibuka akun ini? View Only hanya melihat Dashboard, Jadwal Ruangan, Semua Booking (+ Profil). */
+    fun allowedFor(user: UserDto): Boolean = when {
+        user.isViewer -> this in VIEWER_MENU || this == Profile
+        systemAdmin -> user.isSystemAdmin
+        admin -> user.isAdmin
+        else -> true
+    }
 }
+
+private val MAIN_MENU = listOf(Destination.Dashboard, Destination.Schedule, Destination.MyBookings, Destination.Rooms)
+private val VIEWER_MENU = listOf(Destination.Dashboard, Destination.Schedule, Destination.TodayBookings)
 
 private val Slate200 = Color(0xFFE2E8F0)
 
@@ -102,7 +114,7 @@ fun Sidebar(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                     modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(12.dp),
                 ) {
-                    listOf(Destination.Dashboard, Destination.Schedule, Destination.MyBookings, Destination.Rooms).forEach {
+                    (if (user.isViewer) VIEWER_MENU else MAIN_MENU).forEach {
                         MenuRow(it, current == it) { onSelect(it) }
                     }
                     if (user.isAdmin) {
@@ -113,7 +125,7 @@ fun Sidebar(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(start = 12.dp, top = 20.dp, bottom = 4.dp),
                         )
-                        Destination.entries.filter { it.admin && (!it.systemAdmin || user.isSystemAdmin) }.forEach {
+                        Destination.entries.filter { it.admin && it.allowedFor(user) }.forEach {
                             MenuRow(it, current == it) { onSelect(it) }
                         }
                     }

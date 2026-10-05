@@ -35,6 +35,8 @@ data class UserDto(
 ) {
     val isAdmin: Boolean get() = role == "admin" || role == "system_admin"
     val isSystemAdmin: Boolean get() = role == "system_admin"
+    /** View Only: hanya Dashboard, Jadwal Ruangan, dan Semua Booking; tidak bisa membuat booking. */
+    val isViewer: Boolean get() = role == "viewer"
 }
 
 @Serializable
