@@ -30,6 +30,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -77,6 +79,9 @@ fun MainScreen(user: UserDto, settings: SettingsDto, container: AppContainer) {
     val bookingChanges by container.bookingChanges.collectAsState()
 
     var destination by rememberSaveable { mutableStateOf(Destination.Dashboard) }
+    // Bertambah setiap kali menu dibuka (termasuk membuka ulang menu yang sama), agar halaman
+    // selalu meminta data terbaru ke server alih-alih menampilkan data lama di perangkat.
+    var visit by rememberSaveable { mutableIntStateOf(0) }
     var form by remember { mutableStateOf<BookingDefaults?>(null) }
     var detailId by remember { mutableStateOf<Long?>(null) }
     var confirmLogout by remember { mutableStateOf(false) }
@@ -92,6 +97,7 @@ fun MainScreen(user: UserDto, settings: SettingsDto, container: AppContainer) {
     }
     val navigate: (Destination) -> Unit = {
         destination = it
+        visit++
         scope.launch { drawer.close() }
     }
     val newBooking: () -> Unit = {
@@ -100,11 +106,20 @@ fun MainScreen(user: UserDto, settings: SettingsDto, container: AppContainer) {
 
     // Level akun berubah (mis. diturunkan admin lain): tutup halaman yang tidak boleh diakses lagi.
     LaunchedEffect(user.role) {
-        if ((destination.admin && !user.isAdmin) || (destination.systemAdmin && !user.isSystemAdmin)) destination = Destination.Dashboard
+        if ((destination.admin && !user.isAdmin) || (destination.systemAdmin && !user.isSystemAdmin)) navigate(Destination.Dashboard)
     }
 
     BackHandler(enabled = drawer.isOpen) { scope.launch { drawer.close() } }
-    BackHandler(enabled = !drawer.isOpen && destination != Destination.Dashboard) { destination = Destination.Dashboard }
+    BackHandler(enabled = !drawer.isOpen && destination != Destination.Dashboard) { navigate(Destination.Dashboard) }
+
+    // Dashboard & Jadwal menyimpan datanya di ViewModel: minta data baru setiap kali dibuka.
+    LaunchedEffect(destination, visit) {
+        when (destination) {
+            Destination.Dashboard -> homeVm.enter()
+            Destination.Schedule -> scheduleVm.enter()
+            else -> Unit
+        }
+    }
 
     val sidebar: @Composable (onClose: (() -> Unit)?) -> Unit = { onClose ->
         Sidebar(
@@ -150,13 +165,15 @@ fun MainScreen(user: UserDto, settings: SettingsDto, container: AppContainer) {
             containerColor = Tw.Slate50,
         ) { padding ->
             val modifier = Modifier.padding(padding)
+            // key: halaman dibuat ulang setiap kali dibuka, sehingga datanya dimuat ulang dari server.
+            key(destination, visit) {
             when (destination) {
                 Destination.Dashboard -> HomeContent(
                     user = user,
                     vm = homeVm,
                     onOpenBooking = { detailId = it },
-                    onOpenSchedule = { destination = Destination.Schedule },
-                    onOpenMyBookings = { destination = Destination.MyBookings },
+                    onOpenSchedule = { navigate(Destination.Schedule) },
+                    onOpenMyBookings = { navigate(Destination.MyBookings) },
                     onBookRoom = { roomId -> form = BookingDefaults(roomId = roomId) },
                     modifier = modifier,
                 )
@@ -179,7 +196,7 @@ fun MainScreen(user: UserDto, settings: SettingsDto, container: AppContainer) {
                     isAdmin = user.isAdmin,
                     onOpenSchedule = { roomId ->
                         scheduleVm.showRoomWeek(roomId)
-                        destination = Destination.Schedule
+                        navigate(Destination.Schedule)
                     },
                     onBook = { roomId -> form = BookingDefaults(roomId = roomId) },
                     onMessage = bookingsChanged, // ruangan berubah: jadwal & dashboard ikut dimuat ulang
@@ -206,6 +223,7 @@ fun MainScreen(user: UserDto, settings: SettingsDto, container: AppContainer) {
                     onMessage = notify,
                     modifier = modifier,
                 )
+            }
             }
         }
     }

@@ -40,9 +40,12 @@ class ScheduleViewModel(private val api: MrbsApi, bookingChanges: StateFlow<Int>
     private var job: Job? = null
 
     init {
-        load()
+        // Data dimuat saat halaman dibuka (lihat enter), bukan saat aplikasi mulai.
         viewModelScope.launch { bookingChanges.drop(1).collect { load() } }
     }
+
+    /** Dipanggil setiap kali halaman Jadwal dibuka: selalu ambil data terbaru dari server. */
+    fun enter() = load(refreshing = state.schedule != null)
 
     fun setDate(date: LocalDate) {
         if (date == state.date) return
@@ -67,8 +70,8 @@ class ScheduleViewModel(private val api: MrbsApi, bookingChanges: StateFlow<Int>
 
     /** Buka jadwal mingguan satu ruangan (dari halaman Ruangan). */
     fun showRoomWeek(roomId: Long) {
+        // Data dimuat oleh enter() saat halaman Jadwal dibuka sesudahnya.
         state = state.copy(mode = ScheduleMode.Week, roomId = roomId)
-        load()
     }
 
     fun toggleHighlight() {

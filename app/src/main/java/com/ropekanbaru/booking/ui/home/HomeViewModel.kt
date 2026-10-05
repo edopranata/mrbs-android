@@ -30,10 +30,13 @@ class HomeViewModel(private val api: MrbsApi, bookingChanges: StateFlow<Int>) : 
         private set
 
     init {
-        load()
-        // Muat ulang setelah booking dibuat/dibatalkan dari layar lain.
+        // Data dimuat saat halaman dibuka (lihat enter), bukan saat aplikasi mulai.
+        // Muat ulang juga setelah booking dibuat/dibatalkan dari layar lain.
         viewModelScope.launch { bookingChanges.drop(1).collect { load() } }
     }
+
+    /** Dipanggil setiap kali halaman Dashboard dibuka: selalu ambil data terbaru dari server. */
+    fun enter() = load(refreshing = state.dashboard != null)
 
     fun refresh() = load(refreshing = true)
 

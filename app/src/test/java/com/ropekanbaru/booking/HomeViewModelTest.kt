@@ -48,10 +48,29 @@ class HomeViewModelTest {
     @Test
     fun `server tidak terjangkau tidak membuat aplikasi force close`() = runTest(dispatcher) {
         val vm = HomeViewModel(offlineApi, MutableStateFlow(0))
+        vm.enter()
         advanceUntilIdle()
 
         assertEquals(emptyList<Throwable>(), uncaught)
         assertFalse(vm.state.loading)
         assertTrue(vm.state.error != null)
+    }
+
+    @Test
+    fun `setiap kali dashboard dibuka data diminta ulang ke server`() = runTest(dispatcher) {
+        var calls = 0
+        val countingApi = Proxy.newProxyInstance(MrbsApi::class.java.classLoader, arrayOf(MrbsApi::class.java)) { _, method, _ ->
+            if (method.name == "dashboard") calls++
+            throw IllegalStateException("offline")
+        } as MrbsApi
+        val vm = HomeViewModel(countingApi, MutableStateFlow(0))
+        advanceUntilIdle()
+        assertEquals(0, calls) // belum dibuka: belum ada request
+
+        vm.enter()
+        advanceUntilIdle()
+        vm.enter() // dibuka lagi (mis. pindah menu lalu kembali)
+        advanceUntilIdle()
+        assertEquals(2, calls)
     }
 }
