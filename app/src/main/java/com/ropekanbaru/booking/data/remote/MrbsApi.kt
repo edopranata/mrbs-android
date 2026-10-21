@@ -115,6 +115,8 @@ interface MrbsApi {
     suspend fun auditLogs(
         @Query("search") search: String? = null,
         @Query("category") category: String? = null,
+        @Query("user_id") userId: Long? = null,
+        @Query("user_name") userName: String? = null,
         @Query("from") from: String? = null,
         @Query("to") to: String? = null,
         @Query("page") page: Int = 1,

@@ -1,6 +1,7 @@
 package com.ropekanbaru.booking.ui.admin
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,6 +36,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -56,6 +59,7 @@ import com.ropekanbaru.booking.ui.components.WebModal
 import com.ropekanbaru.booking.ui.components.longDate
 import com.ropekanbaru.booking.ui.components.rememberPagedLoader
 import com.ropekanbaru.booking.ui.icons.CalendarMonth
+import com.ropekanbaru.booking.ui.icons.PersonOutline
 import com.ropekanbaru.booking.ui.icons.Restore
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -102,6 +106,11 @@ private fun JsonElement?.display(): String = when (this) {
 
 private fun parseTime(iso: String): LocalDateTime? = runCatching { LocalDateTime.parse(iso) }.getOrNull()
 
+/** Pelaku yang sedang dilihat: akun ([id]) atau pelaku tanpa akun ("Sistem", username login gagal). */
+private data class Actor(val id: Long?, val name: String, val username: String?)
+
+private fun AuditLogDto.actor() = Actor(user?.id, user?.name ?: userName, user?.username)
+
 /** Audit log (Admin & System Admin): siapa melakukan apa, kapan, dan dari mana. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -112,6 +121,8 @@ fun AuditLogContent(api: MrbsApi, modifier: Modifier = Modifier) {
     var dateText by rememberSaveable { mutableStateOf<String?>(null) }
     var pickDate by remember { mutableStateOf(false) }
     var detail by remember { mutableStateOf<AuditLogDto?>(null) }
+    var actor by remember { mutableStateOf<Actor?>(null) }
+    val scroll = rememberScrollState()
     val date = dateText?.let(LocalDate::parse)
 
     // Cari setelah berhenti mengetik sebentar.
@@ -119,14 +130,28 @@ fun AuditLogContent(api: MrbsApi, modifier: Modifier = Modifier) {
         delay(350)
         query = search.trim()
     }
-    val logs = rememberPagedLoader(query, category, dateText) { page ->
-        api.auditLogs(search = query.ifEmpty { null }, category = category, from = dateText, to = dateText, page = page)
+    val logs = rememberPagedLoader(query, category, dateText, actor) { page ->
+        api.auditLogs(
+            search = query.ifEmpty { null },
+            category = category,
+            userId = actor?.id,
+            userName = actor?.takeIf { it.id == null }?.name,
+            from = dateText,
+            to = dateText,
+            page = page,
+        )
+    }
+    // Pindah ke aktivitas satu pengguna: kembali ke atas daftar.
+    LaunchedEffect(actor) { scroll.animateScrollTo(0) }
+    val showActor: (AuditLogDto) -> Unit = {
+        actor = it.actor()
+        detail = null
     }
 
     PullToRefreshBox(isRefreshing = logs.refreshing, onRefresh = { logs.reload(refresh = true) }, modifier = modifier.fillMaxSize()) {
         BoxWithConstraints {
             val wide = maxWidth >= 600.dp
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(if (wide) 24.dp else 16.dp)) {
+            Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(if (wide) 24.dp else 16.dp)) {
                 WebCard(Modifier.fillMaxWidth()) {
                     val searchField: @Composable (Modifier) -> Unit = { m ->
                         LabeledTextField(
@@ -179,18 +204,38 @@ fun AuditLogContent(api: MrbsApi, modifier: Modifier = Modifier) {
                     }
                     HorizontalDivider(color = Tw.Slate200)
 
+                    actor?.let { a ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().background(Tw.Indigo50).padding(horizontal = 16.dp, vertical = 10.dp),
+                        ) {
+                            Icon(Icons.Outlined.PersonOutline, null, tint = Tw.Indigo600, modifier = Modifier.size(22.dp))
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text("Aktivitas ${a.name}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = Color(0xFF312E81))
+                                Text(
+                                    listOfNotNull(a.username?.let { "@$it" }, if (logs.loaded) "${logs.total} catatan" else null).joinToString(" · "),
+                                    fontSize = 12.sp,
+                                    color = Tw.Indigo700,
+                                )
+                            }
+                            SecondaryButton("Semua pengguna", onClick = { actor = null })
+                        }
+                        HorizontalDivider(color = Tw.Indigo100)
+                    }
+
                     when {
                         logs.loading -> Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                         !logs.loaded -> Box(Modifier.padding(16.dp)) { ErrorCard(logs.error ?: "Gagal memuat audit log.", onRetry = { logs.reload() }) }
                         logs.items.isEmpty() -> EmptyState(
                             Icons.Outlined.Restore,
                             "Belum ada catatan",
-                            if (query.isNotEmpty() || category != null || date != null) "Tidak ada aktivitas yang cocok dengan filter." else "Aktivitas akan tercatat di sini.",
+                            if (query.isNotEmpty() || category != null || date != null || actor != null) "Tidak ada aktivitas yang cocok dengan filter." else "Aktivitas akan tercatat di sini.",
                         )
                         else -> {
                             logs.items.forEachIndexed { i, log ->
                                 if (i > 0) HorizontalDivider(color = Tw.Slate100)
-                                AuditRow(log, showIp = wide, onClick = { detail = log })
+                                AuditRow(log, showIp = wide, onClick = { detail = log }, onActor = if (actor == null) ({ showActor(log) }) else null)
                             }
                             logs.error?.let { Box(Modifier.padding(16.dp)) { ErrorCard(it) } }
                             HorizontalDivider(color = Tw.Slate200)
@@ -214,11 +259,11 @@ fun AuditLogContent(api: MrbsApi, modifier: Modifier = Modifier) {
         )
     }
 
-    detail?.let { AuditDetailDialog(it, onDismiss = { detail = null }) }
+    detail?.let { AuditDetailDialog(it, onDismiss = { detail = null }, onShowActor = { showActor(it) }) }
 }
 
 @Composable
-private fun AuditRow(log: AuditLogDto, showIp: Boolean, onClick: () -> Unit) {
+private fun AuditRow(log: AuditLogDto, showIp: Boolean, onClick: () -> Unit, onActor: (() -> Unit)?) {
     val time = parseTime(log.createdAt)
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp)) {
         Column(Modifier.width(64.dp)) {
@@ -230,7 +275,20 @@ private fun AuditRow(log: AuditLogDto, showIp: Boolean, onClick: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ActionBadge(log)
                 Spacer(Modifier.width(8.dp))
-                Text(log.userName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = Tw.Slate900, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // Ketuk nama: tampilkan seluruh aktivitas pengguna ini.
+                Text(
+                    log.userName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = if (onActor != null) Tw.Indigo700 else Tw.Slate900,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = if (onActor != null) {
+                        Modifier.clip(RoundedCornerShape(4.dp)).clickable(onClickLabel = "Lihat semua aktivitas ${log.userName}", onClick = onActor).padding(horizontal = 2.dp)
+                    } else {
+                        Modifier
+                    },
+                )
             }
             Text(log.description, style = MaterialTheme.typography.bodyMedium, color = Tw.Slate600, maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (log.changes.isNotEmpty()) {
@@ -245,7 +303,7 @@ private fun AuditRow(log: AuditLogDto, showIp: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun AuditDetailDialog(log: AuditLogDto, onDismiss: () -> Unit) {
+private fun AuditDetailDialog(log: AuditLogDto, onDismiss: () -> Unit, onShowActor: () -> Unit) {
     val time = parseTime(log.createdAt)
     WebModal(title = "Detail Aktivitas", onDismiss = onDismiss, maxWidth = 640.dp) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -253,7 +311,10 @@ private fun AuditDetailDialog(log: AuditLogDto, onDismiss: () -> Unit) {
             Text(log.description, style = MaterialTheme.typography.bodyLarge, color = Tw.Slate900)
         }
         DetailItem("Waktu", time?.let { "${longDate(it.toLocalDate())}, ${it.format(clock)}" } ?: log.createdAt)
-        DetailItem("Pengguna", log.userName + (log.user?.username?.let { " (@$it)" } ?: ""))
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            DetailItem("Pengguna", log.userName + (log.user?.username?.let { " (@$it)" } ?: ""))
+            SecondaryButton("Lihat semua aktivitas pengguna ini", onClick = onShowActor, icon = Icons.Outlined.PersonOutline)
+        }
         DetailItem("Alamat IP", log.ipAddress ?: "—")
         log.meta.forEach { (key, value) -> DetailItem(key, value.display()) }
         DetailItem("Perangkat / browser", log.userAgent ?: "—", small = true)
