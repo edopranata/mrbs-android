@@ -22,6 +22,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -38,6 +39,9 @@ import androidx.compose.ui.window.DialogProperties
 /**
  * Modal seperti BaseModal di versi web: judul + tombol ✕, isi yang bisa digulir, dan tombol aksi di
  * bawah. Di HP muncul dari bawah layar; di tablet sebagai kotak di tengah.
+ *
+ * Modal hanya tertutup lewat tombol (✕ / Batal) atau tombol Back: tidak bisa diusap ke bawah dan
+ * tidak tertutup saat area di luarnya disentuh, agar isian form tidak hilang tanpa sengaja.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,7 +81,7 @@ fun WebModal(
     }
 
     if (isWideLayout()) {
-        Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false)) {
             Surface(
                 shape = RoundedCornerShape(16.dp),
                 color = Color.White,
@@ -91,6 +95,8 @@ fun WebModal(
             containerColor = Color.White,
             shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
             dragHandle = null,
+            sheetGesturesEnabled = false,
+            properties = ModalBottomSheetProperties(shouldDismissOnClickOutside = false),
         ) {
             Column(Modifier.imePadding().navigationBarsPadding()) { body() }
         }

@@ -8,8 +8,10 @@ import androidx.lifecycle.viewModelScope
 import com.ropekanbaru.booking.data.CalendarRange
 import com.ropekanbaru.booking.data.ScheduleMode
 import com.ropekanbaru.booking.data.remote.ApiErrors
+import com.ropekanbaru.booking.data.remote.BookingDto
 import com.ropekanbaru.booking.data.remote.MrbsApi
 import com.ropekanbaru.booking.data.remote.ScheduleDto
+import com.ropekanbaru.booking.data.remote.UpdateBookingRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.StateFlow
@@ -79,6 +81,23 @@ class ScheduleViewModel(private val api: MrbsApi, bookingChanges: StateFlow<Int>
     }
 
     fun refresh() = load(refreshing = true)
+
+    /** Pindahkan booking ke ruangan / tanggal / jam lain (hasil seret di grid jadwal). */
+    suspend fun moveBooking(booking: BookingDto, roomId: Long, date: LocalDate, start: String, end: String): Result<Unit> = runCatching {
+        api.updateBooking(
+            booking.id,
+            UpdateBookingRequest(
+                roomId = roomId,
+                title = booking.title,
+                description = booking.description.orEmpty(),
+                startAt = "$date $start",
+                endAt = "$date $end",
+                participants = booking.participants,
+                type = booking.type,
+            ),
+        )
+        Unit
+    }.onFailure { if (it is CancellationException) throw it }
 
     private fun load(refreshing: Boolean = false) {
         val range = state.range

@@ -119,4 +119,28 @@ class CalendarTest {
         assertEquals(true, TodayProgress.startsSoon(10 * 60, 9 * 60 + 45))
         assertEquals(false, TodayProgress.startsSoon(10 * 60, 9 * 60 + 44))
     }
+
+    @Test
+    fun `booking yang diseret tetap di jam operasional dan pas di slot`() {
+        val grid = GridSlots(open = 7 * 60, close = 22 * 60, slot = 30)
+        assertEquals(7 * 60, grid.snapStart(6 * 60, 60))
+        assertEquals(21 * 60, grid.snapStart(21 * 60 + 30, 60)) // 1 jam harus selesai paling lambat 22:00
+        assertEquals(9 * 60 + 30, grid.snapStart(9 * 60 + 45, 60))
+    }
+
+    @Test
+    fun `pindah booking ditolak bila bentrok, sudah lewat, atau kapasitas kurang`() {
+        val grid = GridSlots(open = 7 * 60, close = 22 * 60, slot = 30)
+        val now = LocalDateTime.of(2026, 10, 8, 9, 0)
+        val date = LocalDate.of(2026, 10, 8)
+        val moving = booking(1, "10:00", "11:00").copy(participants = 8)
+        val others = listOf(moving, booking(2, "13:00", "14:00"))
+
+        assertEquals(null, grid.moveProblem(moving, date, others, capacity = 10, start = 10 * 60 + 30, now = now)) // tumpang tindih dengan dirinya sendiri boleh
+        assertEquals(null, grid.moveProblem(moving, date, others, capacity = 10, start = 12 * 60, now = now)) // 12:00–13:00 tepat sebelum booking 2
+        assertEquals("Bentrok", grid.moveProblem(moving, date, others, capacity = 10, start = 12 * 60 + 30, now = now))
+        assertEquals("Sudah lewat", grid.moveProblem(moving, date, others, capacity = 10, start = 8 * 60, now = now))
+        assertEquals("Kapasitas kurang", grid.moveProblem(moving, date, others, capacity = 6, start = 15 * 60, now = now))
+        assertEquals(null, grid.moveProblem(moving, date, listOf(booking(3, "15:00", "16:00", status = "cancelled")), capacity = 0, start = 15 * 60, now = now))
+    }
 }

@@ -42,6 +42,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -50,8 +52,10 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ropekanbaru.booking.data.ScheduleMode
+import com.ropekanbaru.booking.data.remote.ApiErrors
 import com.ropekanbaru.booking.data.remote.BookingDto
 import com.ropekanbaru.booking.data.remote.RoomScheduleDto
+import com.ropekanbaru.booking.ui.components.ConfirmDialog
 import com.ropekanbaru.booking.ui.components.DatePickerModal
 import com.ropekanbaru.booking.ui.components.ErrorCard
 import com.ropekanbaru.booking.ui.components.bookingBlockColors
@@ -69,6 +73,7 @@ import java.time.format.DateTimeFormatter
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.clickable
+import kotlinx.coroutines.launch
 
 private val Slate200 = androidx.compose.ui.graphics.Color(0xFFE2E8F0)
 
@@ -86,11 +91,34 @@ fun ScheduleContent(
     /** null = akun View Only: slot kosong tidak bisa dipilih untuk booking. */
     onSelectSlot: ((roomId: Long?, date: LocalDate, start: String?, end: String?) -> Unit)?,
     modifier: Modifier = Modifier,
+    /** Booking berhasil dipindah dengan diseret; null = tidak bisa memindah (akun View Only). */
+    onMoved: ((message: String) -> Unit)? = null,
+    onError: (message: String) -> Unit = {},
 ) {
     val state = vm.state
     val today = LocalDate.now()
     val rooms = state.schedule?.rooms.orEmpty()
     var pickDate by rememberSaveable { mutableStateOf(false) }
+    var pendingMove by remember { mutableStateOf<PendingMove?>(null) }
+    val scope = rememberCoroutineScope()
+
+    pendingMove?.let { move ->
+        val where = if (move.to.roomId != move.from.roomId) " di ${move.to.roomName}" else ""
+        ConfirmDialog(
+            title = "Pindahkan booking?",
+            message = "\"${move.booking.title}\" dipindah ke ${weekdayDate(move.to.date)}, ${move.start}–${move.end}$where." +
+                if (move.booking.isRecurring) " Hanya tanggal ini yang dipindah; minggu lain dalam seri tidak berubah." else "",
+            confirmText = "Ya, pindahkan",
+            onConfirm = {
+                scope.launch {
+                    vm.moveBooking(move.booking, move.to.roomId, move.to.date, move.start, move.end)
+                        .onSuccess { onMoved?.invoke("Booking berhasil dipindahkan.") }
+                        .onFailure { onError(ApiErrors.message(it)) }
+                }
+            },
+            onDismiss = { pendingMove = null },
+        )
+    }
     var calMonth by rememberSaveable { mutableStateOf(state.date.withDayOfMonth(1)) }
 
     // Kalender kecil mengikuti tanggal terpilih bila tanggal itu di luar dua bulan yang tampil.
@@ -197,6 +225,7 @@ fun ScheduleContent(
                                 highlightMine = state.highlightMine,
                                 onOpenBooking = onOpenBooking,
                                 onSelect = onSelectSlot?.let { pick -> { col, start, end -> pick(col.roomId, col.date, start, end) } },
+                                onMoveBooking = onMoved?.let { { booking, from, to, start, end -> pendingMove = PendingMove(booking, from, to, start, end) } },
                             )
                         }
                         if (state.refreshing || (state.loading && schedule != null)) {
@@ -267,6 +296,8 @@ private fun gridColumns(rooms: List<RoomScheduleDto>, state: ScheduleUiState, to
                 date = day,
                 roomId = room.id,
                 bookings = room.bookings.filter { it.date == day.toString() },
+                roomName = room.name,
+                capacity = room.capacity,
             )
         }
     } else {
@@ -279,9 +310,13 @@ private fun gridColumns(rooms: List<RoomScheduleDto>, state: ScheduleUiState, to
                 date = state.date,
                 roomId = room.id,
                 bookings = room.bookings.filter { it.date == state.date.toString() },
+                roomName = room.name,
+                capacity = room.capacity,
             )
         }
     }
+
+private data class PendingMove(val booking: BookingDto, val from: GridColumn, val to: GridColumn, val start: String, val end: String)
 
 /** Booking dari jadwal tidak memuat relasi ruangan; pasangkan dengan ruangannya. */
 internal data class RoomBooking(val room: RoomScheduleDto, val booking: BookingDto)

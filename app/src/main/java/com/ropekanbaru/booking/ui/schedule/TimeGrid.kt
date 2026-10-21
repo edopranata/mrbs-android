@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -47,9 +49,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
@@ -67,9 +73,9 @@ import com.ropekanbaru.booking.data.remote.BookingDto
 import com.ropekanbaru.booking.ui.components.bookingBlockColors
 import com.ropekanbaru.booking.ui.components.monthTitle
 import com.ropekanbaru.booking.ui.components.weekdayDate
-import kotlinx.coroutines.delay
 import java.time.LocalDate
 import java.time.LocalDateTime
+import kotlinx.coroutines.delay
 
 private val ROW_H = 28.dp
 private val TIME_COL = 64.dp
@@ -91,7 +97,12 @@ data class GridColumn(
     val date: LocalDate,
     val roomId: Long,
     val bookings: List<BookingDto>,
+    val roomName: String = "",
+    val capacity: Int = 0,
 )
+
+/** Booking yang sedang diseret ke jam / kolom lain. [pointer] = posisi jari dalam area kolom (px). */
+private data class MoveDrag(val booking: BookingDto, val fromIndex: Int, val duration: Int, val grab: Int, val pointer: Offset)
 
 private data class Selection(val key: String, val anchor: Int, val current: Int) {
     val from get() = minOf(anchor, current)
@@ -101,6 +112,7 @@ private data class Selection(val key: String, val anchor: Int, val current: Int)
 /**
  * Grid jadwal vertikal seperti versi web: baris = slot waktu, kolom = ruangan / hari.
  * Ketuk slot kosong untuk booking 1 slot (durasi bawaan), atau tekan lama lalu seret untuk memilih rentang.
+ * Booking yang boleh diubah bisa ditekan lama lalu diseret ke jam / ruangan / hari lain ([onMoveBooking]).
  */
 @Composable
 fun TimeGrid(
@@ -114,6 +126,8 @@ fun TimeGrid(
     /** null = hanya melihat (akun View Only). */
     onSelect: ((column: GridColumn, start: String, end: String?) -> Unit)?,
     modifier: Modifier = Modifier,
+    /** null = booking tidak bisa diseret (akun View Only). */
+    onMoveBooking: ((booking: BookingDto, from: GridColumn, to: GridColumn, start: String, end: String) -> Unit)? = null,
 ) {
     val grid = remember(openTime, closeTime, slotMinutes) {
         GridSlots(TimeSlots.toMinutes(openTime), TimeSlots.toMinutes(closeTime), slotMinutes)
@@ -127,7 +141,12 @@ fun TimeGrid(
     }
     var selection by remember { mutableStateOf<Selection?>(null) }
     val select by rememberUpdatedState(onSelect)
-    val rowPx = with(LocalDensity.current) { ROW_H.toPx() }
+    val moveTo by rememberUpdatedState(onMoveBooking)
+    val currentColumns by rememberUpdatedState(columns)
+    var moving by remember { mutableStateOf<MoveDrag?>(null) }
+    val haptics = LocalHapticFeedback.current
+    val density = LocalDensity.current
+    val rowPx = with(density) { ROW_H.toPx() }
     val bodyHeight = ROW_H * grid.starts.size
 
     BoxWithConstraints(modifier.fillMaxSize()) {
@@ -137,6 +156,32 @@ fun TimeGrid(
         // Header ruangan/hari & isi grid memakai ScrollState yang sama agar selalu sejajar; header
         // hanya mengikuti (tidak bisa digeser sendiri).
         val horizontal = rememberScrollState()
+        val colPx = with(density) { colWidth.toPx() }
+        val viewportWidthPx = with(density) { (maxWidth - TIME_COL - 1.dp).toPx() }
+        var viewportHeightPx by remember { mutableFloatStateOf(0f) }
+
+        /** Kolom & jam tujuan dari posisi jari saat ini (ikut bergeser bila grid di-scroll otomatis). */
+        fun targetOf(drag: MoveDrag): Pair<Int, Int> {
+            val x = drag.pointer.x + horizontal.value
+            val y = drag.pointer.y + vertical.value
+            val index = (x / colPx).toInt().coerceIn(0, (currentColumns.size - 1).coerceAtLeast(0))
+            val start = grid.snapStart(grid.open + (y / rowPx).toInt() * grid.slot - drag.grab, drag.duration)
+            return index to start
+        }
+
+        // Saat menyeret dekat tepi, grid bergulir sendiri agar bisa pindah ke ruangan / jam yang belum terlihat.
+        LaunchedEffect(moving != null) {
+            val edge = with(density) { 40.dp.toPx() }
+            while (moving != null) {
+                val p = moving?.pointer ?: break
+                val dx = when { p.x < edge -> -14f; p.x > viewportWidthPx - edge -> 14f; else -> 0f }
+                val dy = when { p.y < edge -> -14f; viewportHeightPx > 0 && p.y > viewportHeightPx - edge -> 14f; else -> 0f }
+                if (dx != 0f) horizontal.scrollBy(dx)
+                if (dy != 0f) vertical.scrollBy(dy)
+                delay(16)
+            }
+        }
+
         Column(Modifier.fillMaxSize()) {
             // Header
             Row(Modifier.height(56.dp)) {
@@ -165,7 +210,7 @@ fun TimeGrid(
             HorizontalDivider(color = Color(0xFFCBD5E1))
 
             // Isi: kolom waktu tetap, kolom ruangan/hari bisa digeser ke samping
-            Row(Modifier.weight(1f).verticalScroll(vertical)) {
+            Row(Modifier.weight(1f).onSizeChanged { viewportHeightPx = it.height.toFloat() }.verticalScroll(vertical)) {
                 Column(Modifier.width(TIME_COL)) {
                     grid.starts.forEachIndexed { i, m ->
                         Text(
@@ -178,7 +223,7 @@ fun TimeGrid(
                 }
                 Box(Modifier.width(1.dp).height(bodyHeight).background(Slate200))
                 Row(Modifier.weight(1f).horizontalScroll(horizontal)) {
-                    columns.forEach { col ->
+                    columns.forEachIndexed { ci, col ->
                         val free = { m: Int -> select != null && grid.isFree(col.date, col.bookings, m, now) }
                         Box(
                             Modifier
@@ -256,6 +301,37 @@ fun TimeGrid(
                                 }
                             }
 
+                            // Tujuan booking yang sedang diseret
+                            moving?.let { drag ->
+                                val (targetIndex, targetStart) = targetOf(drag)
+                                if (targetIndex != ci) return@let
+                                val problem = grid.moveProblem(drag.booking, col.date, col.bookings, col.capacity, targetStart, now)
+                                val unchanged = targetIndex == drag.fromIndex && targetStart == TimeSlots.toMinutes(drag.booking.startTime)
+                                val accent = if (problem != null) Red500 else Indigo500
+                                Column(
+                                    Modifier
+                                        .offset(y = ROW_H * ((targetStart - grid.open) / grid.slot.toFloat()))
+                                        .height(ROW_H * (drag.duration / grid.slot.toFloat()) - 1.dp)
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 2.dp)
+                                        .clip(RoundedCornerShape(3.dp))
+                                        .background(accent.copy(alpha = 0.15f))
+                                        .border(2.dp, accent, RoundedCornerShape(3.dp))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                                ) {
+                                    Text(
+                                        "${TimeSlots.format(targetStart)}–${TimeSlots.format(targetStart + drag.duration)}" +
+                                            (problem?.let { " · $it" } ?: if (unchanged) " · Posisi semula" else ""),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (problem != null) Color(0xFF991B1B) else Color(0xFF3730A3),
+                                        maxLines = 2,
+                                        lineHeight = 14.sp,
+                                    )
+                                    Text(drag.booking.title, fontSize = 11.sp, color = Color(0xFF334155), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                            }
+
                             // Blok booking
                             col.bookings.filter { !it.isCancelled }.forEach { b ->
                                 val start = TimeSlots.toMinutes(b.startTime).coerceAtLeast(grid.open)
@@ -264,17 +340,62 @@ fun TimeGrid(
                                 val rows = (end - start) / grid.slot.toFloat()
                                 val colors = bookingBlockColors(b.type)
                                 val mine = b.userId == currentUserId
+                                val movable = onMoveBooking != null && b.can.update
+                                val blockTopPx = rowPx * ((start - grid.open) / grid.slot.toFloat())
                                 Column(
                                     Modifier
                                         .offset(y = ROW_H * ((start - grid.open) / grid.slot.toFloat()))
                                         .height(maxOf(ROW_H * rows - 1.dp, ROW_H / 2))
                                         .fillMaxWidth()
                                         .padding(horizontal = 2.dp)
-                                        .alpha(if (highlightMine && !mine) 0.3f else 1f)
+                                        .alpha(if (moving?.booking?.id == b.id) 0.4f else if (highlightMine && !mine) 0.3f else 1f)
                                         .clip(RoundedCornerShape(3.dp))
                                         .background(colors.background)
                                         .then(if (mine) Modifier.border(2.dp, Indigo500, RoundedCornerShape(3.dp)) else Modifier)
                                         .clickable { onOpenBooking(b.id) }
+                                        .then(
+                                            if (!movable) {
+                                                Modifier
+                                            } else {
+                                                // Tekan lama lalu seret untuk memindahkan booking.
+                                                Modifier.pointerInput(b.id, ci, grid, colPx) {
+                                                    val padPx = 2.dp.toPx()
+                                                    fun viewport(pos: Offset) = Offset(
+                                                        ci * colPx + padPx + pos.x - horizontal.value,
+                                                        blockTopPx + pos.y - vertical.value,
+                                                    )
+                                                    detectDragGesturesAfterLongPress(
+                                                        onDragStart = { pos ->
+                                                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                            val bookingStart = TimeSlots.toMinutes(b.startTime)
+                                                            val pressed = grid.open + ((blockTopPx + pos.y) / rowPx).toInt() * grid.slot
+                                                            moving = MoveDrag(b, ci, TimeSlots.toMinutes(b.endTime) - bookingStart, pressed - bookingStart, viewport(pos))
+                                                        },
+                                                        onDrag = { change, _ ->
+                                                            change.consume()
+                                                            moving = moving?.copy(pointer = viewport(change.position))
+                                                        },
+                                                        onDragEnd = {
+                                                            val drag = moving
+                                                            moving = null
+                                                            val cols = currentColumns
+                                                            if (drag != null) {
+                                                                val (index, target) = targetOf(drag)
+                                                                val to = cols.getOrNull(index)
+                                                                val from = cols.getOrNull(drag.fromIndex)
+                                                                val changed = index != drag.fromIndex || target != TimeSlots.toMinutes(b.startTime)
+                                                                if (to != null && from != null && changed &&
+                                                                    grid.moveProblem(b, to.date, to.bookings, to.capacity, target, LocalDateTime.now()) == null
+                                                                ) {
+                                                                    moveTo?.invoke(b, from, to, TimeSlots.format(target), TimeSlots.format(target + drag.duration))
+                                                                }
+                                                            }
+                                                        },
+                                                        onDragCancel = { moving = null },
+                                                    )
+                                                }
+                                            },
+                                        )
                                         .semantics { contentDescription = "${b.title}, ${b.startTime}–${b.endTime}, ${b.user?.name.orEmpty()}" },
                                 ) {
                                     Row(Modifier.fillMaxSize()) {

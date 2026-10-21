@@ -186,6 +186,8 @@ fun MainScreen(user: UserDto, settings: SettingsDto, container: AppContainer) {
                     onOpenBooking = { detailId = it },
                     onSelectSlot = if (user.isViewer) null else { roomId, date, start, end -> form = BookingDefaults(roomId = roomId, date = date, start = start, end = end) },
                     modifier = modifier,
+                    onMoved = if (user.isViewer) null else bookingsChanged,
+                    onError = notify,
                 )
                 Destination.MyBookings -> MyBookingsContent(
                     api = container.api,

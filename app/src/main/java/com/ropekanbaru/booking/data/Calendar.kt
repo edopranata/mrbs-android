@@ -76,6 +76,28 @@ class GridSlots(val open: Int, val close: Int, val slot: Int) {
     fun isFree(date: LocalDate, bookings: List<BookingDto>, m: Int, now: LocalDateTime): Boolean =
         m >= open && m + slot <= close && !isPast(date, m, now) && !isBooked(bookings, m)
 
+    /** Awal booking berdurasi [duration] menit yang diseret ke [raw]: tetap di jam operasional & pas di slot. */
+    fun snapStart(raw: Int, duration: Int): Int {
+        val clamped = raw.coerceIn(open, (close - duration).coerceAtLeast(open))
+        return clamped - (clamped - open) % slot
+    }
+
+    /**
+     * Alasan booking [moving] tidak bisa dipindah ke [start] pada kolom tujuan ([date], [bookings],
+     * kapasitas ruangan [capacity]; 0 = tidak diketahui), atau null bila boleh.
+     */
+    fun moveProblem(moving: BookingDto, date: LocalDate, bookings: List<BookingDto>, capacity: Int, start: Int, now: LocalDateTime): String? {
+        val end = start + TimeSlots.toMinutes(moving.endTime) - TimeSlots.toMinutes(moving.startTime)
+        return when {
+            isPast(date, start, now) -> "Sudah lewat"
+            capacity in 1 until moving.participants -> "Kapasitas kurang"
+            bookings.any {
+                it.id != moving.id && !it.isCancelled && TimeSlots.toMinutes(it.startTime) < end && TimeSlots.toMinutes(it.endTime) > start
+            } -> "Bentrok"
+            else -> null
+        }
+    }
+
     /** Perluas pilihan dari [anchor] ke arah [target], berhenti sebelum slot terpakai / sudah lewat. */
     fun extend(anchor: Int, target: Int, free: (Int) -> Boolean): Int {
         val step = if (target >= anchor) slot else -slot
