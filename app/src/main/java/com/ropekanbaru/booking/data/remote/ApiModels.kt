@@ -51,6 +51,10 @@ data class SettingsDto(
     @SerialName("max_duration") val maxDuration: Int = 480,
     @SerialName("max_advance_days") val maxAdvanceDays: Int = 60,
     @SerialName("max_repeat_weeks") val maxRepeatWeeks: Int = 8,
+    // Pemeliharaan otomatis (hanya terisi di menu Pengaturan; 0 = nonaktif).
+    @SerialName("audit_retention_days") val auditRetentionDays: Int = 365,
+    @SerialName("log_retention_days") val logRetentionDays: Int = 14,
+    @SerialName("cache_clear_days") val cacheClearDays: Int = 7,
 )
 
 @Serializable
@@ -100,9 +104,8 @@ data class BookingDto(
     val type: String = "internal",
     @SerialName("is_ongoing") val isOngoing: Boolean = false,
     @SerialName("is_recurring") val isRecurring: Boolean = false,
-    /** Berasal dari MRBS lama; `legacyLocked` = hanya-baca selama sinkronisasi masa transisi. */
+    /** Hasil migrasi data dari MRBS lama (penanda riwayat saja). */
     @SerialName("is_legacy") val isLegacy: Boolean = false,
-    @SerialName("legacy_locked") val legacyLocked: Boolean = false,
     @SerialName("has_ended") val hasEnded: Boolean = false,
     val description: String? = null,
     val participants: Int = 1,
@@ -339,7 +342,19 @@ data class ManageSettingsDto(
     val values: SettingsDto,
     val defaults: SettingsDto,
     val overridden: List<String> = emptyList(),
+    val maintenance: MaintenanceStatusDto = MaintenanceStatusDto(),
 )
+
+/** Pembersihan harian terakhir (`mrbs:cleanup`). */
+@Serializable
+data class MaintenanceStatusDto(
+    val time: String = "01:00",
+    @SerialName("last_run_at") val lastRunAt: String? = null,
+    @SerialName("last_summary") val lastSummary: String? = null,
+)
+
+@Serializable
+data class MaintenanceRequest(@SerialName("clear_cache") val clearCache: Boolean)
 
 /** Bentuk error Laravel: `{ "message": "...", "errors": { "field": ["pesan"] } }`. */
 @Serializable

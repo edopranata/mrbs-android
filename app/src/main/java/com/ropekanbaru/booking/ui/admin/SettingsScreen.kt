@@ -48,9 +48,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ropekanbaru.booking.data.SettingsRules
 import com.ropekanbaru.booking.data.remote.ApiErrors
+import com.ropekanbaru.booking.data.remote.MaintenanceRequest
 import com.ropekanbaru.booking.data.remote.ManageSettingsDto
 import com.ropekanbaru.booking.data.remote.MrbsApi
 import com.ropekanbaru.booking.data.remote.SettingsDto
+import com.ropekanbaru.booking.ui.components.CheckboxRow
 import com.ropekanbaru.booking.ui.components.ConfirmDialog
 import com.ropekanbaru.booking.ui.components.ErrorCard
 import com.ropekanbaru.booking.ui.components.FieldLabel
@@ -65,9 +67,14 @@ import com.ropekanbaru.booking.ui.components.WebCard
 import com.ropekanbaru.booking.ui.components.formatDuration
 import com.ropekanbaru.booking.ui.components.rememberLoader
 import com.ropekanbaru.booking.ui.icons.CalendarMonth
+import com.ropekanbaru.booking.ui.icons.PlayCircle
 import com.ropekanbaru.booking.ui.icons.Restore
 import com.ropekanbaru.booking.ui.icons.Schedule
 import com.ropekanbaru.booking.ui.icons.TextFields
+import com.ropekanbaru.booking.ui.icons.Update
+import java.time.OffsetDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlinx.coroutines.launch
 
 /** Pengaturan aplikasi (khusus System Admin), sama dengan halaman Pengaturan versi web. */
@@ -106,16 +113,31 @@ private fun SettingsForm(
     var form by remember(data) { mutableStateOf(saved) }
     var advance by remember(data) { mutableStateOf(saved.maxAdvanceDays.toString()) }
     var repeat by remember(data) { mutableStateOf(saved.maxRepeatWeeks.toString()) }
+    var auditDays by remember(data) { mutableStateOf(saved.auditRetentionDays.toString()) }
+    var logDays by remember(data) { mutableStateOf(saved.logRetentionDays.toString()) }
+    var cacheDays by remember(data) { mutableStateOf(saved.cacheClearDays.toString()) }
+    var clearCacheNow by remember { mutableStateOf(false) }
+    var confirmRun by remember { mutableStateOf(false) }
+    var running by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var confirmReset by remember { mutableStateOf(false) }
 
-    val current = form.copy(maxAdvanceDays = advance.toIntOrNull() ?: 0, maxRepeatWeeks = repeat.toIntOrNull() ?: 0)
+    val current = form.copy(
+        maxAdvanceDays = advance.toIntOrNull() ?: 0,
+        maxRepeatWeeks = repeat.toIntOrNull() ?: 0,
+        auditRetentionDays = auditDays.toIntOrNull() ?: 0,
+        logRetentionDays = logDays.toIntOrNull() ?: 0,
+        cacheClearDays = cacheDays.toIntOrNull() ?: 0,
+    )
     val changes = SettingsRules.changes(saved, current)
     val discard = {
         form = saved
         advance = saved.maxAdvanceDays.toString()
         repeat = saved.maxRepeatWeeks.toString()
+        auditDays = saved.auditRetentionDays.toString()
+        logDays = saved.logRetentionDays.toString()
+        cacheDays = saved.cacheClearDays.toString()
         error = null
     }
     /** Tautan "↺ default" di sebelah label, hanya bila nilainya berbeda dari default server. */
@@ -249,6 +271,46 @@ private fun SettingsForm(
                         hint = "Isi 1 untuk menonaktifkan booking berulang. Default: ${defaults.maxRepeatWeeks} minggu",
                     )
                 }
+
+                Section(
+                    Icons.Outlined.Update,
+                    "Pemeliharaan Otomatis",
+                    "Dijalankan cron setiap hari pukul ${data.maintenance.time} agar aplikasi tetap ringan. Cache kedaluwarsa dan sesi lama selalu dibuang. Isi 0 untuk menonaktifkan.",
+                ) {
+                    val daysField: @Composable (String, String, (String) -> Unit, Int, Int, String, Boolean, () -> Unit) -> Unit =
+                        { label, value, onChange, maxDigits, default, off, differs, reset ->
+                            LabeledTextField(
+                                label = label,
+                                value = value,
+                                onValueChange = { onChange(it.filter(Char::isDigit).take(maxDigits)) },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                trailingIcon = { Text("hari", color = Tw.Slate400, modifier = Modifier.padding(end = 12.dp)) },
+                                hint = (if (value == "0") "0 = $off. " else "") + "Default: $default hari",
+                                labelTrailing = defaultLink(differs, reset),
+                            )
+                        }
+                    daysField("Masa simpan audit log", auditDays, { auditDays = it }, 4, defaults.auditRetentionDays, "simpan selamanya",
+                        current.auditRetentionDays != defaults.auditRetentionDays) { auditDays = defaults.auditRetentionDays.toString() }
+                    daysField("Masa simpan file log", logDays, { logDays = it }, 3, defaults.logRetentionDays, "tidak dihapus",
+                        current.logRetentionDays != defaults.logRetentionDays) { logDays = defaults.logRetentionDays.toString() }
+                    daysField("Kosongkan seluruh cache tiap", cacheDays, { cacheDays = it }, 2, defaults.cacheClearDays, "tidak otomatis",
+                        current.cacheClearDays != defaults.cacheClearDays) { cacheDays = defaults.cacheClearDays.toString() }
+                    HorizontalDivider(color = Tw.Slate200)
+                    Text(
+                        data.maintenance.lastRunAt?.let { "Terakhir dijalankan ${formatRunTime(it)}: ${data.maintenance.lastSummary.orEmpty()}" }
+                            ?: "Belum pernah dijalankan.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Tw.Slate600,
+                    )
+                    CheckboxRow("Kosongkan seluruh cache juga", clearCacheNow, { clearCacheNow = it })
+                    SecondaryButton(
+                        if (running) "Menjalankan…" else if (changes.isNotEmpty()) "Simpan pengaturan dulu" else "Jalankan sekarang",
+                        onClick = { confirmRun = true },
+                        enabled = !running && changes.isEmpty(),
+                        icon = Icons.Outlined.PlayCircle,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
 
             // Bar simpan: muncul saat ada perubahan
@@ -284,6 +346,30 @@ private fun SettingsForm(
                 }
             }
         }
+    }
+
+    if (confirmRun) {
+        ConfirmDialog(
+            title = "Jalankan pembersihan sekarang?",
+            message = "Audit log dan isi file log yang melewati masa simpan, cache kedaluwarsa, dan sesi lama akan dihapus" +
+                if (clearCacheNow) ", dan seluruh cache dikosongkan." else ".",
+            confirmText = "Jalankan",
+            onDismiss = { confirmRun = false },
+            onConfirm = {
+                running = true
+                error = null
+                scope.launch {
+                    runCatching { api.runMaintenance(MaintenanceRequest(clearCacheNow)) }
+                        .onSuccess {
+                            clearCacheNow = false
+                            onSaved(it)
+                            onMessage(it.maintenance.lastSummary ?: "Pembersihan selesai.")
+                        }
+                        .onFailure { error = ApiErrors.message(it) }
+                    running = false
+                }
+            },
+        )
     }
 
     if (confirmReset) {
@@ -340,3 +426,9 @@ private fun Section(icon: ImageVector, title: String, description: String, conte
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) { content() }
     }
 }
+
+/** "2026-10-21T01:00:03+07:00" → "21 Okt 2026, 01:00". */
+private fun formatRunTime(iso: String): String = runCatching {
+    OffsetDateTime.parse(iso).toLocalDateTime().format(DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm", Locale.forLanguageTag("id-ID")))
+}.getOrDefault(iso)
+

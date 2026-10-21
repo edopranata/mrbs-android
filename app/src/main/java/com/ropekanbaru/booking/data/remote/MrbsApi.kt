@@ -151,4 +151,7 @@ interface MrbsApi {
 
     @DELETE("settings")
     suspend fun resetSettings(): ManageSettingsDto
+
+    @POST("settings/maintenance")
+    suspend fun runMaintenance(@Body body: MaintenanceRequest): ManageSettingsDto
 }

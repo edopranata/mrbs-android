@@ -177,16 +177,6 @@ fun BookingDetailSheet(
                         Text(it, style = MaterialTheme.typography.bodyMedium, color = Tw.Slate600, modifier = Modifier.padding(12.dp))
                     }
                 }
-                if (booking.legacyLocked) {
-                    Surface(shape = RoundedCornerShape(8.dp), color = Tw.Amber50, border = BorderStroke(1.dp, Color(0xFFFDE68A)), modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            "Booking ini berasal dari MRBS lama. Selama masa transisi, ubah atau batalkan di MRBS lama; perubahannya akan tersinkron otomatis.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color(0xFF92400E),
-                            modifier = Modifier.padding(12.dp),
-                        )
-                    }
-                }
                 if (booking.isCancelled) {
                     Surface(shape = RoundedCornerShape(8.dp), color = Tw.Red50, border = BorderStroke(1.dp, Tw.Red200), modifier = Modifier.fillMaxWidth()) {
                         Text(
