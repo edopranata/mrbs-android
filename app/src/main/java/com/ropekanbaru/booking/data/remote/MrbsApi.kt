@@ -109,6 +109,18 @@ interface MrbsApi {
     @DELETE("bookings/{id}")
     suspend fun deleteBooking(@Path("id") id: Long): MessageResponse
 
+    // ---- Audit log (admin) ----
+
+    @GET("audit-logs")
+    suspend fun auditLogs(
+        @Query("search") search: String? = null,
+        @Query("category") category: String? = null,
+        @Query("from") from: String? = null,
+        @Query("to") to: String? = null,
+        @Query("page") page: Int = 1,
+        @Query("per_page") perPage: Int = 25,
+    ): PageResponse<AuditLogDto>
+
     // ---- Manajemen user (admin) ----
 
     @GET("users")

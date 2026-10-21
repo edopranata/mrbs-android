@@ -2,6 +2,7 @@ package com.ropekanbaru.booking.data.remote
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 
 @Serializable
 data class LoginRequest(
@@ -263,6 +264,34 @@ data class RoomSaveRequest(
 )
 
 /** Respons daftar Laravel yang dipaginasi. */
+/** Satu catatan audit log (Admin & System Admin). */
+@Serializable
+data class AuditLogDto(
+    val id: Long,
+    @SerialName("created_at") val createdAt: String,
+    val action: String,
+    @SerialName("action_label") val actionLabel: String = "",
+    val category: String = "",
+    @SerialName("category_label") val categoryLabel: String = "",
+    val description: String = "",
+    @SerialName("user_name") val userName: String = "Sistem",
+    val user: AuditUserRef? = null,
+    val changes: List<AuditChangeDto> = emptyList(),
+    /** Keterangan tambahan; kunci sudah berupa label (mis. "Alasan"), nilai teks / angka. */
+    val meta: Map<String, JsonElement> = emptyMap(),
+    @SerialName("ip_address") val ipAddress: String? = null,
+    @SerialName("user_agent") val userAgent: String? = null,
+) {
+    val isFailure: Boolean get() = action == "auth.login_failed"
+}
+
+@Serializable
+data class AuditUserRef(val id: Long, val name: String, val username: String? = null)
+
+/** Satu kolom yang berubah: nilai sebelum → sesudah (null = kosong). */
+@Serializable
+data class AuditChangeDto(val field: String, val label: String, val old: JsonElement? = null, val new: JsonElement? = null)
+
 @Serializable
 data class PageResponse<T>(val data: List<T>, val meta: PageMeta = PageMeta())
 

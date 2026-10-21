@@ -51,6 +51,7 @@ import com.ropekanbaru.booking.ui.icons.Dashboard
 import com.ropekanbaru.booking.ui.icons.FactCheck
 import com.ropekanbaru.booking.ui.icons.Group
 import com.ropekanbaru.booking.ui.icons.Logout
+import com.ropekanbaru.booking.ui.icons.Restore
 
 /** Tujuan menu sidebar (sama dengan menu versi web). */
 enum class Destination(val title: String, val icon: ImageVector, val admin: Boolean = false, val systemAdmin: Boolean = false) {
@@ -60,6 +61,7 @@ enum class Destination(val title: String, val icon: ImageVector, val admin: Bool
     Rooms("Ruangan", Icons.Outlined.Apartment),
     TodayBookings("Semua Booking", Icons.AutoMirrored.Outlined.FactCheck, admin = true),
     Users("Manajemen User", Icons.Outlined.Group, admin = true),
+    AuditLog("Audit Log", Icons.Outlined.Restore, admin = true),
     Settings("Pengaturan", Icons.Outlined.Settings, admin = true, systemAdmin = true),
     Profile("Profil", Icons.Outlined.AccountCircle),
     ;

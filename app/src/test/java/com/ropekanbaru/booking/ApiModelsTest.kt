@@ -1,8 +1,11 @@
 package com.ropekanbaru.booking
 
 import com.ropekanbaru.booking.data.remote.ApiJson
+import com.ropekanbaru.booking.data.remote.AuditLogDto
 import com.ropekanbaru.booking.data.remote.DashboardDto
 import com.ropekanbaru.booking.data.remote.LoginResponse
+import com.ropekanbaru.booking.data.remote.PageResponse
+import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -38,5 +41,27 @@ class ApiModelsTest {
         assertEquals(2, dashboard.stats.roomsInUse)
         assertEquals("Ruang Anggrek", dashboard.myUpcoming.single().room?.name)
         assertTrue(dashboard.myUpcoming.single().isRecurring)
+    }
+
+    @Test
+    fun `respons audit log terbaca termasuk meta kosong dan nilai angka`() {
+        val json = """
+            {"data":[
+              {"id":3,"created_at":"2026-10-21T10:59:57","action":"room.updated","action_label":"Ubah ruangan","category":"room",
+               "category_label":"Ruangan","description":"Mengubah ruangan BRILIAN ROOM","user_name":"Ani","user":{"id":1,"name":"Ani","username":"ani"},
+               "subject_type":"room","subject_id":2,"changes":[{"field":"capacity","label":"Kapasitas","old":10,"new":12}],
+               "meta":{},"ip_address":"127.0.0.1","user_agent":"curl"},
+              {"id":2,"created_at":"2026-10-21T10:00:00","action":"auth.login_failed","action_label":"Login gagal","category":"auth",
+               "category_label":"Akun & Login","description":"Login gagal: password salah","user_name":"budi","user":null,
+               "changes":[],"meta":{"Username dicoba":"budi"},"ip_address":null,"user_agent":null}
+            ],"meta":{"current_page":1,"last_page":1,"total":2},"categories":{"room":"Ruangan"},"retention_days":365}
+        """.trimIndent()
+
+        val page = ApiJson.decodeFromString<PageResponse<AuditLogDto>>(json)
+        assertEquals(2, page.meta.total)
+        assertEquals("12", (page.data[0].changes.single().new as JsonPrimitive).content)
+        assertTrue(page.data[0].meta.isEmpty())
+        assertTrue(page.data[1].isFailure)
+        assertEquals("budi", (page.data[1].meta.getValue("Username dicoba") as JsonPrimitive).content)
     }
 }

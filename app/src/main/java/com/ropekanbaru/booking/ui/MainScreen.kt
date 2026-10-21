@@ -49,6 +49,7 @@ import com.ropekanbaru.booking.data.remote.SettingsDto
 import com.ropekanbaru.booking.data.remote.UserDto
 import com.ropekanbaru.booking.ui.admin.SettingsContent
 import com.ropekanbaru.booking.ui.admin.TodayBookingsContent
+import com.ropekanbaru.booking.ui.admin.AuditLogContent
 import com.ropekanbaru.booking.ui.admin.UsersContent
 import com.ropekanbaru.booking.ui.booking.BookingDefaults
 import com.ropekanbaru.booking.ui.booking.BookingDetailSheet
@@ -214,6 +215,7 @@ fun MainScreen(user: UserDto, settings: SettingsDto, container: AppContainer) {
                     modifier = modifier,
                 )
                 Destination.Users -> UsersContent(api = container.api, currentUser = user, onMessage = notify, modifier = modifier)
+                Destination.AuditLog -> AuditLogContent(api = container.api, modifier = modifier)
                 Destination.Settings -> SettingsContent(
                     api = container.api,
                     onApplied = { container.updateSettings(it) },
